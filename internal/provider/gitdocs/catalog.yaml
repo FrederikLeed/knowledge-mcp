@@ -148,6 +148,14 @@ datasets:
     description: README and in-repository Markdown documentation for SpecterOps BloodHound Community Edition (attack path management for Active Directory and Entra ID).
     topics: [BloodHound, Active Directory, attack paths, Entra ID, security]
   - <<: *tool
+    repo: SpecterOps/bloodhound-docs
+    name: BloodHound documentation
+    description: The official BloodHound documentation site (bloodhound.specterops.io) - collection, analysis, edges, nodes, OpenGraph and administration.
+    topics: [BloodHound, Active Directory, Entra ID, attack paths, OpenGraph, edges]
+    include: ["docs/**/*.md", "docs/**/*.mdx"]
+    url_rules:
+      - {prefix: "docs/", base: "https://bloodhound.specterops.io/"}
+  - <<: *tool
     repo: SpecterOps/SharpHound
     name: SharpHound
     description: README and documentation for SharpHound, the BloodHound data collector for Active Directory.
