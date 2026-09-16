@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strconv"
 	"syscall"
 	"time"
@@ -17,9 +18,11 @@ import (
 	"github.com/lkarlslund/knowledge-mcp/internal/model"
 	"github.com/lkarlslund/knowledge-mcp/internal/provider"
 	eurlexprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/eurlex"
+	gitdocsprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/gitdocs"
 	kiwixprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/kiwix"
 	ncbiprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/ncbi"
 	rfcprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/rfc"
+	webpagesprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/webpages"
 	wikimediaprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/wikimedia"
 	"github.com/lkarlslund/knowledge-mcp/internal/store"
 	"github.com/lkarlslund/knowledge-mcp/internal/wikimedia"
@@ -51,16 +54,23 @@ func Execute() error {
 }
 
 func newServeCommand() *cobra.Command {
-	var listen, dataDir string
+	var listen, dataDir, webpagesDir string
 	var downloadWorkers, indexWorkers, downloadConnections int
+	var allowNonLoopback bool
 	command := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the persistent Streamable HTTP MCP backend",
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := requireLoopback(listen); err != nil {
+			if err := checkListenAddress(listen, allowNonLoopback); err != nil {
 				return err
 			}
-			providers, err := provider.NewRegistry(wikimediaprovider.New(wikimedia.NewClient(downloadConnections)), rfcprovider.New(), kiwixprovider.New(), ncbiprovider.New(), eurlexprovider.New())
+			if allowNonLoopback {
+				fmt.Fprintf(os.Stderr, "WARNING: --allow-non-loopback is set; %s serves MCP and the dashboard WITHOUT authentication. Anyone who can reach it can download, update, and delete datasets and change settings. Only expose it on a private network.\n", listen)
+			}
+			if webpagesDir == "" {
+				webpagesDir = filepath.Join(dataDir, "webpages")
+			}
+			providers, err := provider.NewRegistry(wikimediaprovider.New(wikimedia.NewClient(downloadConnections)), rfcprovider.New(), kiwixprovider.New(), ncbiprovider.New(), eurlexprovider.New(), gitdocsprovider.New(), webpagesprovider.New(webpagesDir, filepath.Join(dataDir, "datasets", webpagesprovider.ProviderID)))
 			if err != nil {
 				return err
 			}
@@ -83,7 +93,9 @@ func newServeCommand() *cobra.Command {
 		},
 	}
 	command.Flags().StringVar(&listen, "listen", "127.0.0.1:8765", "loopback listen address")
+	command.Flags().BoolVar(&allowNonLoopback, "allow-non-loopback", false, "allow a non-loopback listen address (no authentication: private networks only)")
 	command.Flags().StringVar(&dataDir, "data-dir", "./data", "runtime data directory")
+	command.Flags().StringVar(&webpagesDir, "webpages-dir", "", "directory of webpages dataset lists (default <data-dir>/webpages)")
 	command.Flags().IntVar(&downloadWorkers, "download-workers", 3, "concurrent download/update jobs")
 	command.Flags().IntVar(&indexWorkers, "index-workers", 1, "concurrent indexing jobs")
 	command.Flags().IntVar(&downloadConnections, "download-connections", 3, "parallel HTTP ranges shared by downloads")
@@ -288,7 +300,10 @@ func printResult(value any, err error) error {
 	return encoder.Encode(value)
 }
 
-func requireLoopback(address string) error {
+// checkListenAddress requires an explicit IP address. Without
+// allowNonLoopback it must be a loopback address; with it, any IP (including
+// the 0.0.0.0/:: wildcards) is accepted for private container networks.
+func checkListenAddress(address string, allowNonLoopback bool) error {
 	host, port, err := net.SplitHostPort(address)
 	if err != nil {
 		return fmt.Errorf("invalid listen address: %w", err)
@@ -297,8 +312,11 @@ func requireLoopback(address string) error {
 		return fmt.Errorf("invalid listen port: %w", err)
 	}
 	ip := net.ParseIP(host)
-	if ip == nil || !ip.IsLoopback() {
-		return errors.New("serve only accepts an explicit loopback IP address")
+	if ip == nil {
+		return errors.New("serve only accepts an explicit IP address")
+	}
+	if !ip.IsLoopback() && !allowNonLoopback {
+		return errors.New("serve only accepts an explicit loopback IP address; pass --allow-non-loopback to listen on a private network")
 	}
 	return nil
 }

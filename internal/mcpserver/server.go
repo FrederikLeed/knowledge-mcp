@@ -292,7 +292,10 @@ func ServeHTTP(ctx context.Context, listen string, service DashboardService) err
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("ok\n"))
 	})
-	registerPProf(mux)
+	// Profiles expose process internals; serve them only on loopback listeners.
+	if address, ok := listener.Addr().(*net.TCPAddr); ok && address.IP.IsLoopback() {
+		registerPProf(mux)
+	}
 	mux.Handle("/", dashboard.Handler(service))
 	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 0, IdleTimeout: 2 * time.Minute}
 	go func() {
