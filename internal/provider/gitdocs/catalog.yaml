@@ -1,0 +1,221 @@
+# Built-in gitdocs catalog. Each entry becomes one dataset whose ID is derived
+# from the repository ("owner/name" -> "owner-name", lowercase) unless `id` is
+# set. Add a repository by appending an entry and rebuilding.
+#
+# Fields:
+#   repo:        GitHub "owner/name" (required)
+#   id:          optional stable dataset ID override
+#   branch:      optional branch; empty follows the default branch HEAD
+#   name, description, project, language, topics: discovery metadata
+#   include:     repository path globs to keep (** matches any depth)
+#   exclude:     globs removed from include matches
+#   fragments:   globs for include-only snippets that are kept for
+#                [!INCLUDE] expansion but never indexed as documents
+#   site_root:   base URL used for site-absolute links ("/path") in bodies
+#   url_rules:   ordered citation URL rules; the first rule whose prefix matches
+#                wins, otherwise the GitHub blob URL at the indexed commit is used
+#     prefix:          path prefix; "*" matches exactly one path segment
+#     base:            URL replacing the prefix
+#     lowercase:       lowercase the remaining path
+#     trailing_slash:  end page URLs with "/"
+#     query:           appended query string (e.g. "?view=powershell-7.6")
+#
+# Files are Markdown (.md, .markdown, .mdx) or DocFX YamlMime content (.yml).
+
+defaults:
+  microsoft_learn: &learn
+    project: Microsoft Learn
+    topics: [Microsoft, documentation]
+    include: ["**/*.md", "**/*.yml"]
+    exclude: [".github/**", "**/TOC.yml", "**/toc.yml", "**/breadcrumb/**", "**/bread/**", "**/docfx.json", "**/zone-pivot-groups.yml", "**/_themes/**", "README.md", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md", "LICENSE*", "ThirdPartyNotices.md", "templates/**", "Contributor-guide/**", ".openpublishing*"]
+    fragments: ["**/includes/**"]
+    site_root: https://learn.microsoft.com
+  tool_repo: &tool
+    project: GitHub
+    include: ["**/*.md", "**/*.mdx"]
+    exclude: [".github/**", "**/node_modules/**", "**/vendor/**", "**/testdata/**", ".claude/**"]
+
+datasets:
+  # ── Microsoft Learn ────────────────────────────────────────────────────
+  - <<: *learn
+    repo: MicrosoftDocs/entra-docs
+    name: Microsoft Entra documentation
+    description: Microsoft Learn documentation for Microsoft Entra ID, identity governance, external ID, global secure access, and related identity services.
+    topics: [Microsoft Entra, identity, Azure AD, conditional access, authentication]
+    url_rules:
+      - {prefix: "docs/", base: "https://learn.microsoft.com/en-us/entra/"}
+  - <<: *learn
+    repo: MicrosoftDocs/windowsserverdocs
+    name: Windows Server documentation
+    description: Microsoft Learn documentation for Windows Server, including Active Directory Domain Services, AD CS, AD FS, Group Policy, networking, storage, and Hyper-V.
+    topics: [Windows Server, Active Directory, AD DS, AD CS, Group Policy]
+    url_rules:
+      - {prefix: "WindowsServerDocs/", base: "https://learn.microsoft.com/en-us/windows-server/"}
+  - <<: *learn
+    repo: MicrosoftDocs/defender-docs
+    name: Microsoft Defender and Sentinel documentation
+    description: Microsoft Learn documentation for Microsoft Defender XDR, Defender for Endpoint, Identity, Office 365, Cloud Apps, Cloud, IoT, exposure management, and Microsoft Sentinel.
+    topics: [Microsoft Defender, Microsoft Sentinel, XDR, security operations, threat protection]
+    url_rules:
+      - {prefix: "defender-for-cloud/", base: "https://learn.microsoft.com/en-us/azure/defender-for-cloud/"}
+      - {prefix: "defender-for-iot-azure/", base: "https://learn.microsoft.com/en-us/azure/defender-for-iot/"}
+      - {prefix: "defender-for-cloud-apps/", base: "https://learn.microsoft.com/en-us/defender-cloud-apps/"}
+      - {prefix: "sentinel/", base: "https://learn.microsoft.com/en-us/azure/sentinel/"}
+      - {prefix: "easm/", base: "https://learn.microsoft.com/en-us/azure/external-attack-surface-management/"}
+      - {prefix: "exposure-management/", base: "https://learn.microsoft.com/en-us/security-exposure-management/"}
+      - {prefix: "unified-secops-platform/", base: "https://learn.microsoft.com/en-us/unified-secops/"}
+      - {prefix: "defender-endpoint/", base: "https://learn.microsoft.com/en-us/defender-endpoint/"}
+      - {prefix: "defender-xdr/", base: "https://learn.microsoft.com/en-us/defender-xdr/"}
+      - {prefix: "defender-office-365/", base: "https://learn.microsoft.com/en-us/defender-office-365/"}
+      - {prefix: "defender-for-identity/", base: "https://learn.microsoft.com/en-us/defender-for-identity/"}
+      - {prefix: "defender-vulnerability-management/", base: "https://learn.microsoft.com/en-us/defender-vulnerability-management/"}
+      - {prefix: "defender-business/", base: "https://learn.microsoft.com/en-us/defender-business/"}
+      - {prefix: "defender-for-iot/", base: "https://learn.microsoft.com/en-us/defender-for-iot/"}
+  - <<: *learn
+    repo: MicrosoftDocs/SupportArticles-docs
+    name: Microsoft troubleshooting articles
+    description: Microsoft Learn troubleshooting and support articles for Windows, Windows Server, Azure, Entra, Exchange, SharePoint, Outlook, Teams, Microsoft 365, and Office.
+    topics: [troubleshooting, support, Windows, Exchange, Microsoft 365]
+    url_rules:
+      - {prefix: "support/", base: "https://learn.microsoft.com/en-us/troubleshoot/"}
+      - {prefix: "Exchange/*/", base: "https://learn.microsoft.com/en-us/troubleshoot/exchange/"}
+      - {prefix: "SharePoint/*/", base: "https://learn.microsoft.com/en-us/troubleshoot/sharepoint/"}
+      - {prefix: "Outlook/*/", base: "https://learn.microsoft.com/en-us/troubleshoot/outlook/"}
+      - {prefix: "Microsoft365/*/", base: "https://learn.microsoft.com/en-us/troubleshoot/microsoft-365/"}
+      - {prefix: "Office/*/", base: "https://learn.microsoft.com/en-us/troubleshoot/office/"}
+      - {prefix: "Teams/", base: "https://learn.microsoft.com/en-us/troubleshoot/microsoftteams/"}
+      - {prefix: "Viva/", base: "https://learn.microsoft.com/en-us/troubleshoot/viva/"}
+  - <<: *learn
+    repo: MicrosoftDocs/PowerShell-Docs
+    name: PowerShell documentation
+    description: Microsoft Learn PowerShell documentation - conceptual scripting guides, about_ topics, and cmdlet reference for PowerShell 7.6.
+    topics: [PowerShell, scripting, cmdlets, automation]
+    include: ["reference/docs-conceptual/**/*.md", "reference/docs-conceptual/**/*.yml", "reference/7.6/**/*.md", "reference/includes/**"]
+    url_rules:
+      - {prefix: "reference/docs-conceptual/", base: "https://learn.microsoft.com/en-us/powershell/scripting/"}
+      - {prefix: "reference/7.6/", base: "https://learn.microsoft.com/en-us/powershell/module/", lowercase: true, query: "?view=powershell-7.6"}
+  - <<: *learn
+    repo: MicrosoftDocs/microsoft-365-docs
+    name: Microsoft 365 documentation
+    description: Microsoft Learn documentation for Microsoft 365 enterprise administration, security, compliance, and Microsoft 365 Copilot.
+    topics: [Microsoft 365, enterprise administration, Copilot, compliance]
+    url_rules:
+      - {prefix: "microsoft-365/", base: "https://learn.microsoft.com/en-us/microsoft-365/"}
+      - {prefix: "copilot/", base: "https://learn.microsoft.com/en-us/copilot/microsoft-365/"}
+  - <<: *learn
+    repo: MicrosoftDocs/azure-docs
+    name: Azure documentation
+    description: Microsoft Learn documentation for Azure services (text only; images and media are never downloaded).
+    topics: [Azure, cloud, networking, security, identity]
+    include: ["articles/**/*.md", "articles/**/*.yml", "includes/**"]
+    url_rules:
+      - {prefix: "articles/", base: "https://learn.microsoft.com/en-us/azure/"}
+
+  # ── Home Assistant ─────────────────────────────────────────────────────
+  - repo: home-assistant/home-assistant.io
+    name: Home Assistant user documentation
+    description: Home Assistant user documentation - integrations, automations (triggers, conditions, actions), templating, dashboards, voice control, and installation.
+    project: Home Assistant
+    topics: [Home Assistant, home automation, integrations, smart home]
+    include: ["source/**/*.markdown", "source/**/*.md"]
+    exclude: ["source/_posts/**", "source/_includes/**", "source/_layouts/**", "source/_data/**", "source/javascripts/**"]
+    site_root: https://www.home-assistant.io
+    url_rules:
+      - {prefix: "source/_integrations/", base: "https://www.home-assistant.io/integrations/", trailing_slash: true}
+      - {prefix: "source/_template_functions/", base: "https://www.home-assistant.io/template-functions/", trailing_slash: true}
+      - {prefix: "source/_actions/", base: "https://www.home-assistant.io/actions/", trailing_slash: true}
+      - {prefix: "source/_triggers/", base: "https://www.home-assistant.io/triggers/", trailing_slash: true}
+      - {prefix: "source/_conditions/", base: "https://www.home-assistant.io/conditions/", trailing_slash: true}
+      - {prefix: "source/_docs/", base: "https://www.home-assistant.io/docs/", trailing_slash: true}
+      - {prefix: "source/_apps/", base: "https://www.home-assistant.io/apps/", trailing_slash: true}
+      - {prefix: "source/_faq/", base: "https://www.home-assistant.io/faq/", trailing_slash: true}
+      - {prefix: "source/_dashboards/", base: "https://www.home-assistant.io/dashboards/", trailing_slash: true}
+      - {prefix: "source/", base: "https://www.home-assistant.io/", trailing_slash: true}
+  - repo: home-assistant/developers.home-assistant
+    name: Home Assistant developer documentation
+    description: Home Assistant developer documentation - integration development, architecture, entities, config flows, frontend, and add-ons.
+    project: Home Assistant
+    topics: [Home Assistant, Python, integration development, architecture]
+    include: ["docs/**/*.md", "docs/**/*.mdx"]
+    site_root: https://developers.home-assistant.io
+    url_rules:
+      - {prefix: "docs/", base: "https://developers.home-assistant.io/docs/"}
+
+  # ── Active Directory / Entra security tooling ──────────────────────────
+  - <<: *tool
+    repo: SpecterOps/BloodHound
+    name: BloodHound (source repository docs)
+    description: README and in-repository Markdown documentation for SpecterOps BloodHound Community Edition (attack path management for Active Directory and Entra ID).
+    topics: [BloodHound, Active Directory, attack paths, Entra ID, security]
+  - <<: *tool
+    repo: SpecterOps/SharpHound
+    name: SharpHound
+    description: README and documentation for SharpHound, the BloodHound data collector for Active Directory.
+    topics: [SharpHound, BloodHound, Active Directory, collection]
+  - <<: *tool
+    repo: SpecterOps/AzureHound
+    name: AzureHound
+    description: README and documentation for AzureHound, the BloodHound data collector for Entra ID and Azure.
+    topics: [AzureHound, BloodHound, Entra ID, Azure, collection]
+  - <<: *tool
+    repo: netwrix/pingcastle
+    name: PingCastle
+    description: README and documentation for PingCastle, the Active Directory security assessment tool.
+    topics: [PingCastle, Active Directory, security assessment]
+  - <<: *tool
+    repo: AD-Security/AD_Miner
+    name: AD Miner
+    description: README and documentation for AD Miner, the Active Directory audit tool built on BloodHound data.
+    topics: [AD Miner, Active Directory, audit, BloodHound]
+  - <<: *tool
+    repo: maester365/maester
+    name: Maester
+    description: Maester documentation - Microsoft 365 and Entra security test framework, test catalog (EIDSCA, CISA, CIS, ORCA, AD), and cmdlet reference.
+    topics: [Maester, Microsoft 365, Entra ID, security testing, Pester]
+    include: ["README.md", "website/docs/**/*.md", "website/docs/**/*.mdx", "powershell/**/*.md"]
+    url_rules:
+      - {prefix: "website/docs/", base: "https://maester.dev/docs/"}
+  - <<: *tool
+    repo: ly4k/Certipy
+    name: Certipy
+    description: README and documentation for Certipy, the Active Directory Certificate Services enumeration and abuse toolkit.
+    topics: [Certipy, AD CS, ESC, certificates, Active Directory]
+  - <<: *tool
+    repo: EvotecIT/PasswordSolution
+    name: PasswordSolution
+    description: README and documentation for the PasswordSolution PowerShell module (password expiry notifications and password quality reporting).
+    topics: [PowerShell, passwords, Active Directory, reporting]
+  - <<: *tool
+    repo: emiliensocchi/entra-ca-insight
+    name: Entra CA Insight
+    description: README and documentation for Entra CA Insight, a Conditional Access policy analysis tool.
+    topics: [Entra ID, conditional access, analysis]
+  - <<: *tool
+    repo: emiliensocchi/azure-tiering
+    name: Azure tiering
+    description: README and documentation for the Azure and Entra ID administrative tiering model of roles and permissions.
+    topics: [Entra ID, Azure, tiering, privileged access]
+  - <<: *tool
+    repo: cogiceo/GPOHound
+    name: GPOHound
+    description: README and documentation for GPOHound, the Group Policy Object security analysis tool.
+    topics: [Group Policy, Active Directory, security analysis]
+  - <<: *tool
+    repo: GhostPack/Certify
+    name: Certify
+    description: README and documentation for Certify, the AD CS enumeration and abuse tool.
+    topics: [Certify, AD CS, certificates, Active Directory]
+  - <<: *tool
+    repo: GhostPack/PSPKIAudit
+    name: PSPKIAudit
+    description: README and documentation for PSPKIAudit, the PowerShell AD CS auditing toolkit.
+    topics: [PSPKIAudit, AD CS, PowerShell, audit]
+  - <<: *tool
+    repo: The-Hacker-Recipes/The-Hacker-Recipes
+    name: The Hacker Recipes
+    description: The Hacker Recipes knowledge base - Active Directory, web, and infrastructure attack techniques with tooling guidance.
+    topics: [offensive security, Active Directory, Kerberos, AD CS, techniques]
+    include: ["docs/src/**/*.md", "README.md"]
+    site_root: https://www.thehacker.recipes
+    url_rules:
+      - {prefix: "docs/src/", base: "https://www.thehacker.recipes/"}

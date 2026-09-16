@@ -12,6 +12,8 @@ Included providers:
 - `kiwix`: the complete Kiwix OPDS catalog, grouped into datasets and archive flavours.
 - `ncbi`: the PubMed annual baseline plus ordered daily additions, revisions, and deletions.
 - `eurlex`: official EU legal acts currently in force, in any of the 24 official EU languages.
+- `gitdocs`: Markdown documentation from GitHub repositories (Microsoft Learn, Home Assistant, AD security tooling), one dataset per repository.
+- `webpages`: curated lists of web pages defined in local YAML/JSON files, converted to Markdown.
 
 Provider URLs and local paths are not part of the agent contract. Search returns
 a temporary opaque `ref`; agents pass only that value to `knowledge_read`, without
@@ -53,7 +55,12 @@ the installed generation only after both its title index and shared-search
 generation are ready.
 
 The listener intentionally requires an explicit loopback IP and has no
-authentication layer.
+authentication layer. `--allow-non-loopback` lifts the loopback restriction (an
+explicit IP such as `0.0.0.0` is still required) for private container networks,
+for example a sidecar that other containers reach by name. The server prints a
+warning at startup: anyone who can reach the port can download, update, and
+delete datasets and change settings. Runtime profiles are never served on a
+non-loopback listener.
 
 Runtime profiles are available only on that loopback listener under
 `/debug/pprof/`, for example `go tool pprof http://127.0.0.1:8765/debug/pprof/profile?seconds=30`.
@@ -86,6 +93,12 @@ All non-server commands call the running MCP backend once.
 ./knowledge-mcp search rfc "HTTP status codes"
 ./knowledge-mcp search rfc "RFC 9110" --mode full_text
 ./knowledge-mcp read rfc --id 9110
+
+# GitHub documentation and curated web pages.
+./knowledge-mcp dataset available gitdocs
+./knowledge-mcp dataset download microsoftdocs-powershell-docs
+./knowledge-mcp search microsoftdocs-powershell-docs "splatting"
+./knowledge-mcp dataset download dbu-rules      # needs data/webpages/dbu-rules.yaml
 
 # Wikimedia remains a provider, not a special core concept.
 ./knowledge-mcp dataset download dawiki --variant content-current
@@ -129,11 +142,17 @@ The core contract is in `internal/provider`. Implementations are isolated:
 internal/provider/
 ├── provider.go          discovery, acquisition, and common corpus boundary
 ├── eurlex/              CELLAR discovery, EU legal XHTML, and Markdown
+├── gitdocs/             GitHub repository catalog, tarball streaming, Markdown
 ├── kiwix/               OPDS catalog, native ZIM reader, HTML-to-Markdown
 ├── ncbi/                PubMed baseline + daily updates, XML, and Markdown
 ├── rfc/                 RFC Editor catalog, raw text, and Markdown
+├── webpages/            Curated page lists, polite fetching, HTML-to-Markdown
 └── wikimedia/           Current-content discovery, XML, and Markdown
 ```
+
+Shared helpers live in `internal/htmlmarkdown` (HTML-to-Markdown, used by Kiwix
+and webpages) and `internal/markdowndoc` (front matter, outlines, sections,
+paging).
 
 A provider supplies:
 
@@ -175,6 +194,94 @@ HTTP ranges, and verifies NCBI's published MD5 for each completed part. The EUR-
 through the Publications Office CELLAR endpoint and stores the selected official
 language as resumable XHTML documents. Updates for both providers are built as
 new staging generations and reuse unchanged local source files.
+
+### GitHub documentation (`gitdocs`)
+
+The built-in catalog is `internal/provider/gitdocs/catalog.yaml`; each entry is
+one dataset whose ID is the lowercased `owner-repo` (for example
+`microsoftdocs-entra-docs`, `home-assistant-developers.home-assistant`,
+`specterops-bloodhound`). It covers Microsoft Learn (Entra, Windows Server,
+Defender/Sentinel, support articles, PowerShell 7.6, Microsoft 365, Azure),
+Home Assistant user and developer docs, and AD/Entra security tools
+(BloodHound, SharpHound, AzureHound, PingCastle, AD Miner, Maester, Certipy,
+PasswordSolution, Entra CA Insight, Azure tiering, GPOHound, Certify,
+PSPKIAudit, The Hacker Recipes). To add a repository, append an entry and
+rebuild. Per entry you set:
+
+- `repo`, optional `branch` (default: the default branch HEAD), name, description, topics;
+- `include` / `exclude` path globs (`**` spans directories);
+- `fragments`: include-only snippets, stored for `[!INCLUDE]` expansion but not indexed;
+- `url_rules`: ordered prefix-to-URL rules for citations (a `*` prefix segment
+  matches one directory; `lowercase`, `trailing_slash`, and `query` adjust the
+  URL). Paths without a rule cite the GitHub blob URL at the indexed commit.
+
+The release is the branch head commit, resolved through the GitHub REST API
+(`GITHUB_TOKEN` is used when set) with a fallback to the anonymous git ref
+advertisement when the API is rate limited. Acquisition streams
+`codeload.github.com/<repo>/tar.gz/<sha>` and writes only matching Markdown
+(`.md`, `.markdown`, `.mdx`) and DocFX YAML files, so image and media trees are
+never stored (Azure docs included). YAML files are kept only when they carry a
+`### YamlMime:` content header other than landing/hub/TOC pages, and are
+flattened to Markdown. Titles come from front matter `title:`, then the first
+`# ` heading, then the file name. Front matter is removed from bodies; fields such
+as `description`, `ms.date`, `ms.topic`, and `ms.service` become record metadata
+and keywords (`ms.date` becomes the modification date). Relative links to other
+indexed files become followable knowledge links; other relative links point to
+GitHub. Reads return a short source header and support `section` and outlines.
+An update re-streams the archive for the new commit.
+
+### Curated web pages (`webpages`)
+
+Each `*.yaml`, `*.yml`, or `*.json` file in `--webpages-dir` (default
+`<data-dir>/webpages`) is one dataset named after the file. Choose names that
+no other provider uses. The file lists pages and optional fetch settings:
+
+```yaml
+name: DBU love og regler
+description: Danish football rules and regulations.
+language: da            # en (default) or da
+topics: [football, rules]
+concurrency: 2          # parallel fetches (max 4)
+delay: 1s               # pause after each fetch per worker
+user_agent: ""          # default: a browser-like agent
+pages:
+  - {slug: jylland-turneringsreglement, title: "DBU Jyllands Turneringsreglement", url: "https://www.dbujylland.dk/..."}
+  - {slug: disciplinaere-bestemmelser, title: "De disciplinære bestemmelser", url: "https://www.dbu.dk/media/.../x.pdf", type: pdf}
+  - {slug: herre-dm-regler, title: "Herre-DM regler", url: "https://divisionsforeningen.dk/love-og-regler", type: pdf, pdf_link_text: "Turneringsregler for Herre-DM"}
+```
+
+`contrib/webpages/dbu-rules.yaml` is a ready-made list of 496 DBU rule pages
+(the container image ships it under `/usr/share/knowledge-mcp/webpages`); copy
+it into the webpages directory to enable the `dbu-rules` dataset.
+
+Slugs are the document IDs. HTML pages are stored raw and converted to Markdown
+on indexing and reads: the `main`/`article` element is used, navigation,
+breadcrumbs, share widgets, forms, and footers are dropped, tables stay tables,
+and links become absolute. PDF text is not extracted: `type: pdf` entries are
+indexed by title with a link to the document; with `pdf_link_text` the current
+asset link is resolved from the landing page on every fetch. The release
+fingerprint combines the page list with the ISO week, so an edited list or a new
+week refetches every page. Failed pages (HTTP errors after retries for 429/5xx)
+never abort the run: they are recorded in `documents.json`, an update keeps the
+previous copy marked as stale, and the job fails only when no page could be
+fetched.
+
+## Container
+
+The `Dockerfile` builds a static binary into a small Alpine image that runs as
+an unprivileged user with `/data` as a volume. Its default command is
+`serve --listen 0.0.0.0:8765 --allow-non-loopback --data-dir /data`.
+
+```sh
+docker build -t knowledge-mcp .
+docker network create knowledge
+docker run -d --name knowledge-mcp --network knowledge -v knowledge-data:/data knowledge-mcp
+# CLI from another container on the same private network:
+docker run --rm --network knowledge knowledge-mcp --server http://knowledge-mcp:8765/mcp dataset list
+```
+
+Other containers on the network use `http://knowledge-mcp:8765/mcp`. Do not
+publish the port beyond loopback (`-p 127.0.0.1:8765:8765`).
 
 ## Dashboard
 
@@ -231,8 +338,9 @@ striped across physical Bleve shards. Body text is indexed but not duplicated as
 a stored field. Wikimedia reads open only the page-range bzip2 source file recorded
 for the selected page;
 RFC reads open the canonical local Markdown source; Kiwix reads only the referenced
-ZIM cluster; PubMed reads one compressed baseline or update part; and EUR-Lex reads one local
-XHTML document.
+ZIM cluster; PubMed reads one compressed baseline or update part; EUR-Lex reads one local
+XHTML document; gitdocs reads one Markdown file (plus its includes); and webpages
+reads one stored HTML page.
 
 An initial install exposes title lookup while shared indexing continues. An
 update builds a hidden shared generation and atomically publishes its provider
