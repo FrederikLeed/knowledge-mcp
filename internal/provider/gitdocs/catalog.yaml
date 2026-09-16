@@ -110,6 +110,14 @@ datasets:
     include: ["articles/**/*.md", "articles/**/*.yml", "includes/**"]
     url_rules:
       - {prefix: "articles/", base: "https://learn.microsoft.com/en-us/azure/"}
+  - <<: *learn
+    repo: MicrosoftDocs/security
+    name: Microsoft security documentation
+    description: Microsoft Learn security documentation - privileged access strategy (enterprise access model, PAW, rapid modernization plan), Zero Trust, ransomware protection, and security operations guidance.
+    topics: [privileged access, enterprise access model, PAW, Zero Trust, ransomware, security strategy]
+    include: ["security-docs/**/*.md", "security-docs/**/*.yml"]
+    url_rules:
+      - {prefix: "security-docs/", base: "https://learn.microsoft.com/en-us/security/"}
 
   # ── Home Assistant ─────────────────────────────────────────────────────
   - repo: home-assistant/home-assistant.io
@@ -218,6 +226,23 @@ datasets:
     name: PSPKIAudit
     description: README and documentation for PSPKIAudit, the PowerShell AD CS auditing toolkit.
     topics: [PSPKIAudit, AD CS, PowerShell, audit]
+  - <<: *tool
+    repo: GhostPack/Rubeus
+    name: Rubeus
+    description: README and changelog for Rubeus, the Kerberos interaction and abuse toolkit (roasting, ticket requests, delegation abuse, pass-the-ticket).
+    topics: [Rubeus, Kerberos, Kerberoasting, delegation, Active Directory]
+  - <<: *tool
+    repo: MichaelGrafnetter/DSInternals
+    name: DSInternals
+    description: DSInternals PowerShell module documentation - cmdlet reference for offline ntds.dit access, DCSync replication, password quality testing, and credential roaming.
+    topics: [DSInternals, Active Directory, password quality, ntds.dit, PowerShell]
+    include: [".github/README.md", "Documentation/**/*.md"]
+  - <<: *tool
+    repo: cisagov/ScubaGear
+    name: CISA ScubaGear
+    description: CISA ScubaGear documentation and Secure Cloud Business Applications (SCuBA) security configuration baselines for Entra ID, Exchange Online, Defender, SharePoint, Teams, Power Platform, and Power BI.
+    topics: [CISA, SCuBA, Microsoft 365, Entra ID, security baselines, Exchange Online]
+    include: ["README.md", "docs/**/*.md", "baselines/**/*.md", "PowerShell/ScubaGear/baselines/**/*.md"]
   - <<: *tool
     repo: The-Hacker-Recipes/The-Hacker-Recipes
     name: The Hacker Recipes

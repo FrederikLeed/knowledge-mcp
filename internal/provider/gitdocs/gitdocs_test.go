@@ -27,8 +27,8 @@ func TestBuiltinCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(datasets) != 24 {
-		t.Fatalf("datasets = %d, want 24", len(datasets))
+	if len(datasets) != 28 {
+		t.Fatalf("datasets = %d, want 28", len(datasets))
 	}
 	byID := map[string]Dataset{}
 	for _, item := range datasets {
@@ -38,7 +38,7 @@ func TestBuiltinCatalog(t *testing.T) {
 	if !ok || len(entra.Fragments) == 0 || entra.SiteRoot != "https://learn.microsoft.com" || entra.Project != "Microsoft Learn" {
 		t.Fatalf("entra inherits Microsoft Learn defaults: %#v", entra)
 	}
-	for _, id := range []string{"microsoftdocs-azure-docs", "home-assistant-home-assistant.io", "home-assistant-developers.home-assistant", "specterops-bloodhound", "specterops-bloodhound-docs", "the-hacker-recipes-the-hacker-recipes", "maester365-maester"} {
+	for _, id := range []string{"microsoftdocs-azure-docs", "home-assistant-home-assistant.io", "home-assistant-developers.home-assistant", "specterops-bloodhound", "specterops-bloodhound-docs", "the-hacker-recipes-the-hacker-recipes", "maester365-maester", "microsoftdocs-security", "ghostpack-rubeus", "michaelgrafnetter-dsinternals", "cisagov-scubagear"} {
 		if _, ok := byID[id]; !ok {
 			t.Fatalf("missing dataset %q", id)
 		}
@@ -83,6 +83,8 @@ func TestCitationURLMapping(t *testing.T) {
 		{"microsoftdocs-supportarticles-docs", "support/windows-server/active-directory/replication-error-8453.md", "https://learn.microsoft.com/en-us/troubleshoot/windows-server/active-directory/replication-error-8453"},
 		{"microsoftdocs-defender-docs", "defender-for-cloud-apps/what-is-defender-for-cloud-apps.md", "https://learn.microsoft.com/en-us/defender-cloud-apps/what-is-defender-for-cloud-apps"},
 		{"microsoftdocs-defender-docs", "defender-for-cloud/secure-score.md", "https://learn.microsoft.com/en-us/azure/defender-for-cloud/secure-score"},
+		{"microsoftdocs-security", "security-docs/privileged-access-workstations/privileged-access-strategy.md", "https://learn.microsoft.com/en-us/security/privileged-access-workstations/privileged-access-strategy"},
+		{"cisagov-scubagear", "PowerShell/ScubaGear/baselines/aad.md", "https://github.com/cisagov/ScubaGear/blob/" + testCommit + "/PowerShell/ScubaGear/baselines/aad.md"},
 		{"home-assistant-home-assistant.io", "source/_integrations/hue.markdown", "https://www.home-assistant.io/integrations/hue/"},
 		{"home-assistant-home-assistant.io", "source/_template_functions/today_at.markdown", "https://www.home-assistant.io/template-functions/today_at/"},
 		{"home-assistant-home-assistant.io", "source/getting-started/index.markdown", "https://www.home-assistant.io/getting-started/"},

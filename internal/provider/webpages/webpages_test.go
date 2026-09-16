@@ -376,3 +376,27 @@ func TestShippedDBUListParses(t *testing.T) {
 		t.Fatalf("pages=%d pdfs=%d config=%s/%d/%s", len(config.Pages), pdfs, config.Language, config.Concurrency, config.Delay)
 	}
 }
+
+func TestShippedADSecurityListParses(t *testing.T) {
+	t.Parallel()
+	data, err := os.ReadFile(filepath.Join("..", "..", "..", "contrib", "webpages", "ad-security-references.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, err := ParseConfig(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pdfs, mitre := 0, 0
+	for _, page := range config.Pages {
+		if page.Type == TypePDF {
+			pdfs++
+		}
+		if strings.HasPrefix(page.URL, "https://attack.mitre.org/techniques/") {
+			mitre++
+		}
+	}
+	if len(config.Pages) != 85 || pdfs != 1 || mitre != 52 || config.Language != "en" || config.Concurrency != 2 || config.delay() != time.Second {
+		t.Fatalf("pages=%d pdfs=%d mitre=%d config=%s/%d/%s", len(config.Pages), pdfs, mitre, config.Language, config.Concurrency, config.Delay)
+	}
+}

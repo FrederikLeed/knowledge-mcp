@@ -1,0 +1,109 @@
+# Active Directory / Entra ID security reference pages.
+#
+# Curated from the external references cited by an AD/M365 security assessment
+# toolkit: MITRE ATT&CK technique pages, Microsoft reference pages that are not
+# covered by a gitdocs Microsoft Learn repository, NIST SP 800-63B, and the
+# canonical public research write-ups for common AD attack techniques.
+# Microsoft Learn pages for Entra, Windows Server, troubleshooting, Azure,
+# Microsoft 365 and the privileged access (security) docs are indexed by the
+# gitdocs provider and are intentionally not repeated here.
+#
+# Install: copy to <data-dir>/webpages/ad-security-references.yaml, then
+#   knowledge-mcp dataset download ad-security-references
+name: AD security references
+description: Active Directory and Entra ID security reference pages - MITRE ATT&CK techniques (Kerberos, DCSync, AD CS, delegation, GPO, relay), Microsoft security policy and permission references, NIST SP 800-63B, and canonical AD attack research write-ups.
+project: AD security
+language: en
+topics: [Active Directory, Entra ID, MITRE ATT&CK, Kerberos, AD CS, NTLM relay, delegation, security assessment]
+concurrency: 2
+delay: 1s
+pages:
+  # MITRE ATT&CK Enterprise techniques
+  - {slug: mitre-t1003, title: "MITRE ATT&CK T1003: OS Credential Dumping", url: "https://attack.mitre.org/techniques/T1003/"}
+  - {slug: mitre-t1003-001, title: "MITRE ATT&CK T1003.001: OS Credential Dumping: LSASS Memory", url: "https://attack.mitre.org/techniques/T1003/001/"}
+  - {slug: mitre-t1003-006, title: "MITRE ATT&CK T1003.006: OS Credential Dumping: DCSync", url: "https://attack.mitre.org/techniques/T1003/006/"}
+  - {slug: mitre-t1021, title: "MITRE ATT&CK T1021: Remote Services", url: "https://attack.mitre.org/techniques/T1021/"}
+  - {slug: mitre-t1021-001, title: "MITRE ATT&CK T1021.001: Remote Services: Remote Desktop Protocol", url: "https://attack.mitre.org/techniques/T1021/001/"}
+  - {slug: mitre-t1053, title: "MITRE ATT&CK T1053: Scheduled Task/Job", url: "https://attack.mitre.org/techniques/T1053/"}
+  - {slug: mitre-t1068, title: "MITRE ATT&CK T1068: Exploitation for Privilege Escalation", url: "https://attack.mitre.org/techniques/T1068/"}
+  - {slug: mitre-t1078, title: "MITRE ATT&CK T1078: Valid Accounts", url: "https://attack.mitre.org/techniques/T1078/"}
+  - {slug: mitre-t1078-002, title: "MITRE ATT&CK T1078.002: Valid Accounts: Domain Accounts", url: "https://attack.mitre.org/techniques/T1078/002/"}
+  - {slug: mitre-t1087, title: "MITRE ATT&CK T1087: Account Discovery", url: "https://attack.mitre.org/techniques/T1087/"}
+  - {slug: mitre-t1098, title: "MITRE ATT&CK T1098: Account Manipulation", url: "https://attack.mitre.org/techniques/T1098/"}
+  - {slug: mitre-t1098-001, title: "MITRE ATT&CK T1098.001: Account Manipulation: Additional Cloud Credentials", url: "https://attack.mitre.org/techniques/T1098/001/"}
+  - {slug: mitre-t1098-005, title: "MITRE ATT&CK T1098.005: Account Manipulation: Device Registration", url: "https://attack.mitre.org/techniques/T1098/005/"}
+  - {slug: mitre-t1110, title: "MITRE ATT&CK T1110: Brute Force", url: "https://attack.mitre.org/techniques/T1110/"}
+  - {slug: mitre-t1114, title: "MITRE ATT&CK T1114: Email Collection", url: "https://attack.mitre.org/techniques/T1114/"}
+  - {slug: mitre-t1114-001, title: "MITRE ATT&CK T1114.001: Email Collection: Local Email Collection", url: "https://attack.mitre.org/techniques/T1114/001/"}
+  - {slug: mitre-t1134, title: "MITRE ATT&CK T1134: Access Token Manipulation", url: "https://attack.mitre.org/techniques/T1134/"}
+  - {slug: mitre-t1134-005, title: "MITRE ATT&CK T1134.005: Access Token Manipulation: SID-History Injection", url: "https://attack.mitre.org/techniques/T1134/005/"}
+  - {slug: mitre-t1187, title: "MITRE ATT&CK T1187: Forced Authentication", url: "https://attack.mitre.org/techniques/T1187/"}
+  - {slug: mitre-t1190, title: "MITRE ATT&CK T1190: Exploit Public-Facing Application", url: "https://attack.mitre.org/techniques/T1190/"}
+  - {slug: mitre-t1199, title: "MITRE ATT&CK T1199: Trusted Relationship", url: "https://attack.mitre.org/techniques/T1199/"}
+  - {slug: mitre-t1207, title: "MITRE ATT&CK T1207: Rogue Domain Controller", url: "https://attack.mitre.org/techniques/T1207/"}
+  - {slug: mitre-t1210, title: "MITRE ATT&CK T1210: Exploitation of Remote Services", url: "https://attack.mitre.org/techniques/T1210/"}
+  - {slug: mitre-t1482, title: "MITRE ATT&CK T1482: Domain Trust Discovery", url: "https://attack.mitre.org/techniques/T1482/"}
+  - {slug: mitre-t1484, title: "MITRE ATT&CK T1484: Domain or Tenant Policy Modification", url: "https://attack.mitre.org/techniques/T1484/"}
+  - {slug: mitre-t1484-001, title: "MITRE ATT&CK T1484.001: Domain or Tenant Policy Modification: Group Policy Modification", url: "https://attack.mitre.org/techniques/T1484/001/"}
+  - {slug: mitre-t1490, title: "MITRE ATT&CK T1490: Inhibit System Recovery", url: "https://attack.mitre.org/techniques/T1490/"}
+  - {slug: mitre-t1528, title: "MITRE ATT&CK T1528: Steal Application Access Token", url: "https://attack.mitre.org/techniques/T1528/"}
+  - {slug: mitre-t1539, title: "MITRE ATT&CK T1539: Steal Web Session Cookie", url: "https://attack.mitre.org/techniques/T1539/"}
+  - {slug: mitre-t1548, title: "MITRE ATT&CK T1548: Abuse Elevation Control Mechanism", url: "https://attack.mitre.org/techniques/T1548/"}
+  - {slug: mitre-t1548-002, title: "MITRE ATT&CK T1548.002: Abuse Elevation Control Mechanism: Bypass User Account Control", url: "https://attack.mitre.org/techniques/T1548/002/"}
+  - {slug: mitre-t1550, title: "MITRE ATT&CK T1550: Use Alternate Authentication Material", url: "https://attack.mitre.org/techniques/T1550/"}
+  - {slug: mitre-t1550-001, title: "MITRE ATT&CK T1550.001: Use Alternate Authentication Material: Application Access Token", url: "https://attack.mitre.org/techniques/T1550/001/"}
+  - {slug: mitre-t1550-003, title: "MITRE ATT&CK T1550.003: Use Alternate Authentication Material: Pass the Ticket", url: "https://attack.mitre.org/techniques/T1550/003/"}
+  - {slug: mitre-t1552, title: "MITRE ATT&CK T1552: Unsecured Credentials", url: "https://attack.mitre.org/techniques/T1552/"}
+  - {slug: mitre-t1552-006, title: "MITRE ATT&CK T1552.006: Unsecured Credentials: Group Policy Preferences", url: "https://attack.mitre.org/techniques/T1552/006/"}
+  - {slug: mitre-t1553, title: "MITRE ATT&CK T1553: Subvert Trust Controls", url: "https://attack.mitre.org/techniques/T1553/"}
+  - {slug: mitre-t1553-002, title: "MITRE ATT&CK T1553.002: Subvert Trust Controls: Code Signing", url: "https://attack.mitre.org/techniques/T1553/002/"}
+  - {slug: mitre-t1555, title: "MITRE ATT&CK T1555: Credentials from Password Stores", url: "https://attack.mitre.org/techniques/T1555/"}
+  - {slug: mitre-t1555-003, title: "MITRE ATT&CK T1555.003: Credentials from Password Stores: Credentials from Web Browsers", url: "https://attack.mitre.org/techniques/T1555/003/"}
+  - {slug: mitre-t1556, title: "MITRE ATT&CK T1556: Modify Authentication Process", url: "https://attack.mitre.org/techniques/T1556/"}
+  - {slug: mitre-t1557, title: "MITRE ATT&CK T1557: Adversary-in-the-Middle", url: "https://attack.mitre.org/techniques/T1557/"}
+  - {slug: mitre-t1558, title: "MITRE ATT&CK T1558: Steal or Forge Kerberos Tickets", url: "https://attack.mitre.org/techniques/T1558/"}
+  - {slug: mitre-t1558-001, title: "MITRE ATT&CK T1558.001: Steal or Forge Kerberos Tickets: Golden Ticket", url: "https://attack.mitre.org/techniques/T1558/001/"}
+  - {slug: mitre-t1558-003, title: "MITRE ATT&CK T1558.003: Steal or Forge Kerberos Tickets: Kerberoasting", url: "https://attack.mitre.org/techniques/T1558/003/"}
+  - {slug: mitre-t1558-004, title: "MITRE ATT&CK T1558.004: Steal or Forge Kerberos Tickets: AS-REP Roasting", url: "https://attack.mitre.org/techniques/T1558/004/"}
+  - {slug: mitre-t1563, title: "MITRE ATT&CK T1563: Remote Service Session Hijacking", url: "https://attack.mitre.org/techniques/T1563/"}
+  - {slug: mitre-t1563-002, title: "MITRE ATT&CK T1563.002: Remote Service Session Hijacking: RDP Hijacking", url: "https://attack.mitre.org/techniques/T1563/002/"}
+  - {slug: mitre-t1566, title: "MITRE ATT&CK T1566: Phishing", url: "https://attack.mitre.org/techniques/T1566/"}
+  - {slug: mitre-t1566-001, title: "MITRE ATT&CK T1566.001: Phishing: Spearphishing Attachment", url: "https://attack.mitre.org/techniques/T1566/001/"}
+  - {slug: mitre-t1649, title: "MITRE ATT&CK T1649: Steal or Forge Authentication Certificates", url: "https://attack.mitre.org/techniques/T1649/"}
+  - {slug: mitre-t1685-001, title: "MITRE ATT&CK T1685.001: Disable or Modify Tools: Disable or Modify Windows Event Log", url: "https://attack.mitre.org/techniques/T1685/001/"}
+  # Microsoft reference pages (not in an indexed gitdocs repository)
+  - {slug: ms-user-rights-assignment, title: "User Rights Assignment (security policy settings)", url: "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/user-rights-assignment"}
+  - {slug: ms-lan-manager-authentication-level, title: "Network security: LAN Manager authentication level", url: "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-security-lan-manager-authentication-level"}
+  - {slug: ms-kerberos-encryption-types, title: "Network security: Configure encryption types allowed for Kerberos", url: "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-security-configure-encryption-types-allowed-for-kerberos"}
+  - {slug: ms-everyone-permissions-anonymous, title: "Network access: Let Everyone permissions apply to anonymous users", url: "https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/security-policy-settings/network-access-let-everyone-permissions-apply-to-anonymous-users"}
+  - {slug: ms-graph-permissions-reference, title: "Microsoft Graph permissions reference", url: "https://learn.microsoft.com/en-us/graph/permissions-reference"}
+  - {slug: ms-ews-impersonation, title: "Impersonation and EWS in Exchange", url: "https://learn.microsoft.com/en-us/exchange/client-developer/exchange-web-services/impersonation-and-ews-in-exchange"}
+  - {slug: ms14-025, title: "MS14-025: Vulnerability in Group Policy Preferences could allow elevation of privilege", url: "https://learn.microsoft.com/en-us/security-updates/securitybulletins/2014/ms14-025"}
+  - {slug: kb5014754, title: "KB5014754: Certificate-based authentication changes on Windows domain controllers", url: "https://support.microsoft.com/en-us/servicing/os/windows-server/2022/05/kb5014754-certificate-based-authentication-changes-on-windows-domain-controllers"}
+  # Standards
+  - {slug: nist-sp800-63b, title: "NIST SP 800-63B: Digital Identity Guidelines - Authentication and Lifecycle Management", url: "https://pages.nist.gov/800-63-3/sp800-63b.html"}
+  # Canonical AD / Entra attack research
+  - {slug: harmj0y-guide-to-attacking-domain-trusts, title: "A Guide to Attacking Domain Trusts", url: "https://blog.harmj0y.net/redteaming/a-guide-to-attacking-domain-trusts/"}
+  - {slug: harmj0y-another-word-on-delegation, title: "Another Word on Delegation", url: "https://blog.harmj0y.net/redteaming/another-word-on-delegation/"}
+  - {slug: harmj0y-breaking-forest-trusts, title: "Not A Security Boundary: Breaking Forest Trusts", url: "https://blog.harmj0y.net/redteaming/not-a-security-boundary-breaking-forest-trusts/"}
+  - {slug: harmj0y-roasting-as-reps, title: "Roasting AS-REPs", url: "https://blog.harmj0y.net/activedirectory/roasting-as-reps/"}
+  - {slug: harmj0y-targeted-kerberoasting, title: "Targeted Kerberoasting", url: "https://blog.harmj0y.net/activedirectory/targeted-kerberoasting/"}
+  - {slug: harmj0y-most-dangerous-user-right, title: "The Most Dangerous User Right You (Probably) Have Never Heard Of", url: "https://blog.harmj0y.net/activedirectory/the-most-dangerous-user-right-you-probably-have-never-heard-of/"}
+  - {slug: harmj0y-kerberoasting-without-mimikatz, title: "Kerberoasting Without Mimikatz", url: "https://blog.harmj0y.net/powershell/kerberoasting-without-mimikatz/"}
+  - {slug: harmj0y-kerberoasting-revisited, title: "Kerberoasting Revisited", url: "https://blog.harmj0y.net/redteaming/kerberoasting-revisited/"}
+  - {slug: harmj0y-dpapi-abuse, title: "Operational Guidance for Offensive User DPAPI Abuse", url: "https://blog.harmj0y.net/redteaming/operational-guidance-for-offensive-user-dpapi-abuse/"}
+  - {slug: harmj0y-localaccounttokenfilterpolicy, title: "Pass-the-Hash Is Dead: Long Live LocalAccountTokenFilterPolicy", url: "https://blog.harmj0y.net/redteaming/pass-the-hash-is-dead-long-live-localaccounttokenfilterpolicy/"}
+  - {slug: specterops-certified-pre-owned, title: "Certified Pre-Owned (AD CS abuse)", url: "https://specterops.io/blog/2021/06/17/certified-pre-owned/"}
+  - {slug: specterops-an-ace-up-the-sleeve, title: "An ACE Up the Sleeve: Designing Active Directory DACL Backdoors (whitepaper)", url: "https://specterops.io/wp-content/uploads/sites/3/2022/06/an_ace_up_the_sleeve.pdf", type: pdf}
+  - {slug: specterops-azure-sp-abuse, title: "Azure Privilege Escalation via Service Principal Abuse", url: "https://specterops.io/blog/2021/10/12/azure-privilege-escalation-via-service-principal-abuse/"}
+  - {slug: specterops-detection-in-depth, title: "Detection in Depth", url: "https://specterops.io/blog/2020/05/08/detection-in-depth/"}
+  - {slug: specterops-ghostsurf, title: "ghostsurf: From NTLM Relay to Browser Session Hijacking", url: "https://specterops.io/blog/2026/04/02/ghostsurf-from-ntlm-relay-to-browser-session-hijacking/"}
+  - {slug: dirkjanm-exchange-privexchange, title: "Abusing Exchange: One API call away from Domain Admin", url: "https://dirkjanm.io/abusing-exchange-one-api-call-away-from-domain-admin/"}
+  - {slug: dirkjanm-ntlm-relay-kerberos-delegation, title: "The worst of both worlds: Combining NTLM Relaying and Kerberos delegation", url: "https://dirkjanm.io/worst-of-both-worlds-ntlm-relaying-and-kerberos-delegation/"}
+  - {slug: dirkjanm-prt-sso-abuse, title: "Abusing Azure AD SSO with the Primary Refresh Token", url: "https://dirkjanm.io/abusing-azure-ad-sso-with-the-primary-refresh-token/"}
+  - {slug: shenaniganslabs-wagging-the-dog, title: "Wagging the Dog: Abusing Resource-Based Constrained Delegation", url: "https://shenaniganslabs.io/2019/01/28/Wagging-the-Dog.html"}
+  - {slug: netspi-machineaccountquota, title: "MachineAccountQuota is USEFUL Sometimes", url: "https://www.netspi.com/blog/technical-blog/network-pentesting/machineaccountquota-is-useful-sometimes/"}
+  - {slug: adsecurity-dcsync, title: "Mimikatz DCSync Usage, Exploitation, and Detection", url: "https://adsecurity.org/?p=1729"}
+  - {slug: adsecurity-gpp-sysvol-passwords, title: "Finding Passwords in SYSVOL & Exploiting Group Policy Preferences", url: "https://adsecurity.org/?p=2288"}
+  - {slug: dcshadow, title: "DCShadow attack", url: "https://www.dcshadow.com/"}
+  - {slug: aadinternals-federation-vulnerability, title: "Security vulnerability in Azure AD & Office 365 identity federation", url: "https://aadinternals.com/post/federation-vulnerability/"}

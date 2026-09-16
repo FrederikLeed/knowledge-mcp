@@ -201,11 +201,12 @@ The built-in catalog is `internal/provider/gitdocs/catalog.yaml`; each entry is
 one dataset whose ID is the lowercased `owner-repo` (for example
 `microsoftdocs-entra-docs`, `home-assistant-developers.home-assistant`,
 `specterops-bloodhound`). It covers Microsoft Learn (Entra, Windows Server,
-Defender/Sentinel, support articles, PowerShell 7.6, Microsoft 365, Azure),
-Home Assistant user and developer docs, and AD/Entra security tools
-(BloodHound, SharpHound, AzureHound, PingCastle, AD Miner, Maester, Certipy,
-PasswordSolution, Entra CA Insight, Azure tiering, GPOHound, Certify,
-PSPKIAudit, The Hacker Recipes). To add a repository, append an entry and
+Defender/Sentinel, support articles, PowerShell 7.6, Microsoft 365, Azure,
+security/privileged access), Home Assistant user and developer docs, and AD/Entra
+security tools (BloodHound, SharpHound, AzureHound, PingCastle, AD Miner,
+Maester, Certipy, PasswordSolution, Entra CA Insight, Azure tiering, GPOHound,
+Certify, PSPKIAudit, Rubeus, DSInternals, CISA ScubaGear baselines, The Hacker
+Recipes). To add a repository, append an entry and
 rebuild. Per entry you set:
 
 - `repo`, optional `branch` (default: the default branch HEAD), name, description, topics;
@@ -253,6 +254,11 @@ pages:
 `contrib/webpages/dbu-rules.yaml` is a ready-made list of 496 DBU rule pages
 (the container image ships it under `/usr/share/knowledge-mcp/webpages`); copy
 it into the webpages directory to enable the `dbu-rules` dataset.
+`contrib/webpages/ad-security-references.yaml` (shipped the same way) lists 85
+AD/Entra security reference pages: MITRE ATT&CK technique pages, Microsoft
+security policy, Graph permission and KB references not covered by gitdocs,
+NIST SP 800-63B, and canonical AD attack research write-ups; copy it to enable
+the `ad-security-references` dataset.
 
 Slugs are the document IDs. HTML pages are stored raw and converted to Markdown
 on indexing and reads: the `main`/`article` element is used, navigation,
