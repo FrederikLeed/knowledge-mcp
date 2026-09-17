@@ -206,8 +206,11 @@ security/privileged access), Home Assistant user and developer docs, and AD/Entr
 security tools (BloodHound, SharpHound, AzureHound, PingCastle, AD Miner,
 Maester, Certipy, PasswordSolution, Entra CA Insight, Azure tiering, GPOHound,
 Certify, PSPKIAudit, Rubeus, DSInternals, CISA ScubaGear baselines, The Hacker
-Recipes). To add a repository, append an entry and
-rebuild. Per entry you set:
+Recipes). To add a repository without rebuilding, put entries in the custom
+catalog `<data-dir>/gitdocs.yaml` (`--gitdocs-catalog`), most easily from the
+dashboard's **Sources** section. It uses the same format, is re-read whenever it
+changes, and may not reuse a built-in dataset ID; a broken file is reported and
+the built-in catalog stays available. Per entry you set:
 
 - `repo`, optional `branch` (default: the default branch HEAD), name, description, topics;
 - `include` / `exclude` path globs (`**` spans directories);
@@ -250,6 +253,11 @@ pages:
   - {slug: disciplinaere-bestemmelser, title: "De disciplinære bestemmelser", url: "https://www.dbu.dk/media/.../x.pdf", type: pdf}
   - {slug: herre-dm-regler, title: "Herre-DM regler", url: "https://divisionsforeningen.dk/love-og-regler", type: pdf, pdf_link_text: "Turneringsregler for Herre-DM"}
 ```
+
+Page lists can also be created, edited, and deleted in the dashboard's
+**Sources** section, which validates each file before saving it and can start
+the fetch right away. Deleting a list file keeps downloaded data until the
+dataset itself is deleted.
 
 `contrib/webpages/dbu-rules.yaml` is a ready-made list of 496 DBU rule pages
 (the container image ships it under `/usr/share/knowledge-mcp/webpages`); copy

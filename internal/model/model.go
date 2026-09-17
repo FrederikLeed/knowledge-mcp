@@ -350,3 +350,33 @@ type ReadOptions struct {
 	ReferenceBudgetChars int
 	ReferenceMaxChars    int
 }
+
+// SourceList describes the editable dataset sources shown in the dashboard.
+type SourceList struct {
+	Repos         []RepoSource     `json:"repos"`
+	RepoFileError string           `json:"repo_file_error,omitempty"`
+	PageLists     []PageListSource `json:"page_lists"`
+}
+
+// RepoSource is one GitHub documentation repository.
+type RepoSource struct {
+	ID          string   `json:"id"`
+	Repo        string   `json:"repo"`
+	Branch      string   `json:"branch,omitempty"`
+	Name        string   `json:"name"`
+	Description string   `json:"description,omitempty"`
+	Include     []string `json:"include"`
+	Custom      bool     `json:"custom"`
+}
+
+// PageListSource is one curated web page list file.
+type PageListSource struct {
+	ID          string   `json:"id"`
+	File        string   `json:"file"`
+	Name        string   `json:"name,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Language    string   `json:"language,omitempty"`
+	Pages       int      `json:"pages"`
+	Sites       []string `json:"sites,omitempty"`
+	Error       string   `json:"error,omitempty"`
+}

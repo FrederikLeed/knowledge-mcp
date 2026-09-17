@@ -243,7 +243,7 @@ type corpus struct {
 }
 
 func (p *GitDocs) OpenCorpus(directory string, manifest model.Manifest) (provider.Corpus, error) {
-	item := p.byID[manifest.Dataset]
+	item := p.lookup(manifest.Dataset)
 	if item == nil {
 		return nil, fmt.Errorf("gitdocs dataset %q is no longer in the catalog", manifest.Dataset)
 	}

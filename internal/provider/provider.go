@@ -288,8 +288,16 @@ func writeDiskCatalog(path string, catalog diskCatalog) error {
 	if err != nil {
 		return err
 	}
+	return WriteFileAtomic(path, append(data, '\n'))
+}
+
+// WriteFileAtomic replaces path with data through a temporary sibling file.
+func WriteFileAtomic(path string, data []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
 	temporary := path + ".tmp"
-	if err := os.WriteFile(temporary, append(data, '\n'), 0o644); err != nil {
+	if err := os.WriteFile(temporary, data, 0o644); err != nil {
 		return err
 	}
 	return os.Rename(temporary, path)

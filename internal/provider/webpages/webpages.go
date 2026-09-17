@@ -275,6 +275,84 @@ func (p *WebPages) Discover(_ context.Context, filter string, _ bool) ([]model.A
 	return result, nil
 }
 
+// ListSource describes one page list file for source management.
+type ListSource struct {
+	ID     string
+	File   string
+	Config Config
+	Err    error
+}
+
+// Sources returns every page list file, including ones that fail validation.
+func (p *WebPages) Sources() ([]ListSource, error) {
+	if p.configDir == "" {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(p.configDir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var result []ListSource
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		extension := filepath.Ext(entry.Name())
+		dataset := strings.TrimSuffix(entry.Name(), extension)
+		if entry.IsDir() || !isConfigExtension(extension) || seen[dataset] || !idPattern.MatchString(dataset) {
+			continue
+		}
+		seen[dataset] = true
+		source := ListSource{ID: dataset}
+		if path, ok := p.configPath(dataset); ok {
+			source.File = filepath.Base(path)
+		}
+		source.Config, source.Err = p.loadConfig(dataset)
+		result = append(result, source)
+	}
+	return result, nil
+}
+
+// ReadSource returns the raw page list file for dataset.
+func (p *WebPages) ReadSource(dataset string) (string, error) {
+	path, ok := p.configPath(dataset)
+	if !ok {
+		return "", fmt.Errorf("no page list named %q", dataset)
+	}
+	data, err := os.ReadFile(path)
+	return string(data), err
+}
+
+// SaveSource validates content and atomically writes the page list for
+// dataset, keeping an existing file's extension and defaulting to .yaml.
+func (p *WebPages) SaveSource(dataset, content string) error {
+	if p.configDir == "" {
+		return errors.New("no webpages directory is configured")
+	}
+	if !idPattern.MatchString(dataset) {
+		return fmt.Errorf("invalid page list name %q: use lowercase letters, digits, '.', '_' or '-'", dataset)
+	}
+	if _, err := ParseConfig([]byte(content)); err != nil {
+		return err
+	}
+	path, ok := p.configPath(dataset)
+	if !ok {
+		path = filepath.Join(p.configDir, dataset+".yaml")
+	}
+	return provider.WriteFileAtomic(path, []byte(content))
+}
+
+// DeleteSource removes the page list file for dataset. Installed data stays
+// until the dataset itself is deleted.
+func (p *WebPages) DeleteSource(dataset string) error {
+	path, ok := p.configPath(dataset)
+	if !ok {
+		return fmt.Errorf("no page list named %q", dataset)
+	}
+	return os.Remove(path)
+}
+
 func isConfigExtension(extension string) bool {
 	for _, candidate := range configNames {
 		if strings.EqualFold(candidate, extension) {

@@ -279,7 +279,7 @@ func changingAnnotations(destructive, openWorld bool) *mcp.ToolAnnotations {
 	return &mcp.ToolAnnotations{DestructiveHint: &destructive, OpenWorldHint: &openWorld}
 }
 
-func ServeHTTP(ctx context.Context, listen string, service DashboardService) error {
+func ServeHTTP(ctx context.Context, listen string, service DashboardService, sources dashboard.Sources) error {
 	var listenConfig net.ListenConfig
 	listener, err := listenConfig.Listen(ctx, "tcp", listen)
 	if err != nil {
@@ -296,7 +296,7 @@ func ServeHTTP(ctx context.Context, listen string, service DashboardService) err
 	if address, ok := listener.Addr().(*net.TCPAddr); ok && address.IP.IsLoopback() {
 		registerPProf(mux)
 	}
-	mux.Handle("/", dashboard.Handler(service))
+	mux.Handle("/", dashboard.Handler(service, sources))
 	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, WriteTimeout: 0, IdleTimeout: 2 * time.Minute}
 	go func() {
 		<-ctx.Done()

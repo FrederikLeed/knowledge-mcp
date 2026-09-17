@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -78,6 +79,8 @@ type Dataset struct {
 	Fragments   []string  `yaml:"fragments"`
 	SiteRoot    string    `yaml:"site_root"`
 	URLRules    []URLRule `yaml:"url_rules"`
+	// Custom marks entries loaded from the editable custom catalog file.
+	Custom bool `yaml:"-"`
 }
 
 // ParseCatalog parses and validates a catalog document.
@@ -125,8 +128,13 @@ func ParseCatalog(data []byte) ([]Dataset, error) {
 }
 
 type GitDocs struct {
+	builtin      []Dataset
+	customPath   string
+	mu           sync.RWMutex
 	datasets     []Dataset
 	byID         map[string]*Dataset
+	customStamp  string
+	customErr    error
 	apiBase      string
 	codeloadBase string
 	gitBase      string
@@ -134,29 +142,152 @@ type GitDocs struct {
 	http         *http.Client
 }
 
-// New returns the provider with the built-in catalog.
-func New() *GitDocs {
+// New returns the provider with the built-in catalog plus the optional custom
+// catalog at customPath, which is re-read whenever the file changes.
+func New(customPath string) *GitDocs {
 	datasets, err := ParseCatalog(builtinCatalog)
 	if err != nil {
 		panic(err)
 	}
-	return NewWithCatalog(datasets, "https://api.github.com", "https://codeload.github.com", "https://github.com")
+	p := NewWithCatalog(datasets, "https://api.github.com", "https://codeload.github.com", "https://github.com")
+	p.customPath = customPath
+	p.reload()
+	return p
 }
 
 // NewWithCatalog returns a provider for explicit datasets and GitHub endpoints.
 func NewWithCatalog(datasets []Dataset, apiBase, codeloadBase, gitBase string) *GitDocs {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 60 * time.Second
-	p := &GitDocs{datasets: datasets, byID: make(map[string]*Dataset, len(datasets)), apiBase: strings.TrimRight(apiBase, "/"), codeloadBase: strings.TrimRight(codeloadBase, "/"), gitBase: strings.TrimRight(gitBase, "/"), token: strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), http: &http.Client{Transport: transport}}
-	for index := range p.datasets {
-		p.byID[p.datasets[index].ID] = &p.datasets[index]
-	}
+	p := &GitDocs{builtin: datasets, apiBase: strings.TrimRight(apiBase, "/"), codeloadBase: strings.TrimRight(codeloadBase, "/"), gitBase: strings.TrimRight(gitBase, "/"), token: strings.TrimSpace(os.Getenv("GITHUB_TOKEN")), http: &http.Client{Transport: transport}}
+	p.setDatasets(datasets)
 	return p
+}
+
+func (p *GitDocs) setDatasets(datasets []Dataset) {
+	byID := make(map[string]*Dataset, len(datasets))
+	for index := range datasets {
+		byID[datasets[index].ID] = &datasets[index]
+	}
+	p.datasets, p.byID = datasets, byID
+}
+
+// MergeCustomCatalog validates a custom catalog document against the built-in
+// entries and returns the combined catalog.
+func MergeCustomCatalog(builtin []Dataset, data []byte) ([]Dataset, error) {
+	merged := append([]Dataset(nil), builtin...)
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return merged, nil
+	}
+	custom, err := ParseCatalog(data)
+	if err != nil {
+		return nil, err
+	}
+	for _, item := range custom {
+		for _, existing := range builtin {
+			if existing.ID == item.ID {
+				return nil, fmt.Errorf("custom gitdocs entry %q duplicates a built-in dataset ID", item.ID)
+			}
+		}
+		item.Custom = true
+		merged = append(merged, item)
+	}
+	return merged, nil
+}
+
+func customStamp(info os.FileInfo) string {
+	return fmt.Sprintf("%d:%d", info.ModTime().UnixNano(), info.Size())
+}
+
+// reload re-reads the custom catalog when its file changed. A broken file
+// keeps the built-in catalog available and is reported by CustomCatalog.
+func (p *GitDocs) reload() {
+	if p.customPath == "" {
+		return
+	}
+	stamp := ""
+	info, statErr := os.Stat(p.customPath)
+	if statErr == nil {
+		stamp = customStamp(info)
+	}
+	p.mu.RLock()
+	unchanged := stamp == p.customStamp
+	p.mu.RUnlock()
+	if unchanged {
+		return
+	}
+	var data []byte
+	var err error
+	if statErr == nil {
+		data, err = os.ReadFile(p.customPath)
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		err = statErr
+	}
+	datasets := p.builtin
+	if err == nil {
+		datasets, err = MergeCustomCatalog(p.builtin, data)
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.customStamp, p.customErr = stamp, err
+	if err != nil {
+		datasets = p.builtin
+	}
+	p.setDatasets(datasets)
+}
+
+func (p *GitDocs) lookup(id string) *Dataset {
+	p.reload()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.byID[id]
+}
+
+// Catalog returns every dataset, built-in entries first.
+func (p *GitDocs) Catalog() []Dataset {
+	p.reload()
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return append([]Dataset(nil), p.datasets...)
+}
+
+// CustomCatalog returns the raw custom catalog file and the error, if any,
+// that kept it from loading.
+func (p *GitDocs) CustomCatalog() (string, error) {
+	p.reload()
+	if p.customPath == "" {
+		return "", errors.New("no custom gitdocs catalog is configured")
+	}
+	data, err := os.ReadFile(p.customPath)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return string(data), p.customErr
+}
+
+// SaveCustomCatalog validates and atomically replaces the custom catalog.
+func (p *GitDocs) SaveCustomCatalog(content string) error {
+	if p.customPath == "" {
+		return errors.New("no custom gitdocs catalog is configured")
+	}
+	if _, err := MergeCustomCatalog(p.builtin, []byte(content)); err != nil {
+		return err
+	}
+	if err := provider.WriteFileAtomic(p.customPath, []byte(content)); err != nil {
+		return err
+	}
+	p.reload()
+	return nil
 }
 
 func (*GitDocs) ID() string { return ProviderID }
 
-func (p *GitDocs) Owns(collection string) bool { return p.byID[collection] != nil }
+func (p *GitDocs) Owns(collection string) bool { return p.lookup(collection) != nil }
 
 func (*GitDocs) Backfill(context.Context, string, *model.Manifest) bool { return false }
 
@@ -164,7 +295,7 @@ func (p *GitDocs) Discover(_ context.Context, filter string, _ bool) ([]model.Av
 	filter = strings.ToLower(strings.TrimSpace(filter))
 	today := time.Now().UTC().Format("20060102")
 	var result []model.AvailableDataset
-	for _, item := range p.datasets {
+	for _, item := range p.Catalog() {
 		haystack := strings.ToLower(strings.Join(append([]string{item.ID, item.Repo, item.Name, item.Description, item.Project, "github markdown documentation gitdocs"}, item.Topics...), " "))
 		if filter != "" && !strings.Contains(haystack, filter) {
 			continue
@@ -201,7 +332,7 @@ type release struct {
 }
 
 func (p *GitDocs) Latest(ctx context.Context, collection, variant string) (provider.Release, error) {
-	item := p.byID[collection]
+	item := p.lookup(collection)
 	if item == nil || variant != "" && variant != variantID {
 		return provider.Release{}, fmt.Errorf("unknown gitdocs dataset or variant %q/%q", collection, variant)
 	}
@@ -331,7 +462,7 @@ type docEntry struct {
 }
 
 func (p *GitDocs) Acquire(ctx context.Context, collection, _ string, value provider.Release, stage, _ string, progress provider.Progress) (model.Manifest, error) {
-	item := p.byID[collection]
+	item := p.lookup(collection)
 	if item == nil {
 		return model.Manifest{}, fmt.Errorf("unknown gitdocs dataset %q", collection)
 	}

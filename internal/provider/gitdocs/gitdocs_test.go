@@ -433,3 +433,58 @@ func TestGitDocsLifecycle(t *testing.T) {
 		t.Fatal("fragments must not be readable as documents")
 	}
 }
+
+func TestCustomCatalogFileReloadsAndValidates(t *testing.T) {
+	t.Parallel()
+	builtin, err := ParseCatalog([]byte("datasets:\n  - repo: a/built\n    include: [\"**/*.md\"]\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "gitdocs.yaml")
+	backend := NewWithCatalog(builtin, "http://127.0.0.1:1", "http://127.0.0.1:1", "http://127.0.0.1:1")
+	backend.customPath = path
+	backend.reload()
+	if !backend.Owns("a-built") || backend.Owns("b-custom") {
+		t.Fatal("catalog without custom file should hold only built-in entries")
+	}
+	if content, err := backend.CustomCatalog(); content != "" || err != nil {
+		t.Fatalf("missing custom file = %q, %v", content, err)
+	}
+	if err := backend.SaveCustomCatalog("datasets:\n  - repo: b/custom\n    include: [docs/**]\n"); err != nil {
+		t.Fatal(err)
+	}
+	if !backend.Owns("b-custom") {
+		t.Fatal("saved custom entry is not owned")
+	}
+	catalog := backend.Catalog()
+	if len(catalog) != 2 || catalog[0].Custom || !catalog[1].Custom {
+		t.Fatalf("catalog = %+v", catalog)
+	}
+	// Invalid documents and IDs that shadow built-in entries are rejected and
+	// leave the saved file untouched.
+	for _, bad := range []string{"datasets:\n  - repo: c/nope\n", "datasets:\n  - repo: A/Built\n    include: [x]\n", "datasets: [:"} {
+		if err := backend.SaveCustomCatalog(bad); err == nil {
+			t.Fatalf("SaveCustomCatalog(%q) succeeded", bad)
+		}
+	}
+	if !backend.Owns("b-custom") {
+		t.Fatal("rejected save dropped the previous custom entry")
+	}
+	// A file broken outside the dashboard keeps the built-in catalog and is
+	// reported, and fixing it on disk is picked up without a restart.
+	if err := os.WriteFile(path, []byte("datasets:\n  - repo: bad\n    include: [x]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if backend.Owns("b-custom") || !backend.Owns("a-built") {
+		t.Fatal("broken custom file should fall back to the built-in catalog")
+	}
+	if content, err := backend.CustomCatalog(); err == nil || !strings.Contains(content, "repo: bad") {
+		t.Fatalf("broken custom file = %q, %v", content, err)
+	}
+	if err := os.WriteFile(path, []byte("datasets:\n  - repo: d/fixed\n    include: [x]\n    extra: padding-to-change-size\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if !backend.Owns("d-fixed") {
+		t.Fatal("fixed custom file was not reloaded")
+	}
+}

@@ -24,6 +24,7 @@ import (
 	rfcprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/rfc"
 	webpagesprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/webpages"
 	wikimediaprovider "github.com/lkarlslund/knowledge-mcp/internal/provider/wikimedia"
+	"github.com/lkarlslund/knowledge-mcp/internal/sources"
 	"github.com/lkarlslund/knowledge-mcp/internal/store"
 	"github.com/lkarlslund/knowledge-mcp/internal/wikimedia"
 	"github.com/spf13/cobra"
@@ -54,7 +55,7 @@ func Execute() error {
 }
 
 func newServeCommand() *cobra.Command {
-	var listen, dataDir, webpagesDir string
+	var listen, dataDir, webpagesDir, gitdocsCatalog string
 	var downloadWorkers, indexWorkers, downloadConnections int
 	var allowNonLoopback bool
 	command := &cobra.Command{
@@ -70,7 +71,12 @@ func newServeCommand() *cobra.Command {
 			if webpagesDir == "" {
 				webpagesDir = filepath.Join(dataDir, "webpages")
 			}
-			providers, err := provider.NewRegistry(wikimediaprovider.New(wikimedia.NewClient(downloadConnections)), rfcprovider.New(), kiwixprovider.New(), ncbiprovider.New(), eurlexprovider.New(), gitdocsprovider.New(), webpagesprovider.New(webpagesDir, filepath.Join(dataDir, "datasets", webpagesprovider.ProviderID)))
+			if gitdocsCatalog == "" {
+				gitdocsCatalog = filepath.Join(dataDir, "gitdocs.yaml")
+			}
+			repos := gitdocsprovider.New(gitdocsCatalog)
+			pages := webpagesprovider.New(webpagesDir, filepath.Join(dataDir, "datasets", webpagesprovider.ProviderID))
+			providers, err := provider.NewRegistry(wikimediaprovider.New(wikimedia.NewClient(downloadConnections)), rfcprovider.New(), kiwixprovider.New(), ncbiprovider.New(), eurlexprovider.New(), repos, pages)
 			if err != nil {
 				return err
 			}
@@ -81,7 +87,7 @@ func newServeCommand() *cobra.Command {
 			ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
 			defer stop()
 			fmt.Fprintf(os.Stderr, "serving MCP at http://%s/mcp using %s\n", listen, dataDir)
-			serveErr := mcpserver.ServeHTTP(ctx, listen, backend)
+			serveErr := mcpserver.ServeHTTP(ctx, listen, backend, sources.New(repos, pages))
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			if closeErr := backend.CloseContext(shutdownCtx); closeErr != nil && !errors.Is(closeErr, context.DeadlineExceeded) {
@@ -96,6 +102,7 @@ func newServeCommand() *cobra.Command {
 	command.Flags().BoolVar(&allowNonLoopback, "allow-non-loopback", false, "allow a non-loopback listen address (no authentication: private networks only)")
 	command.Flags().StringVar(&dataDir, "data-dir", "./data", "runtime data directory")
 	command.Flags().StringVar(&webpagesDir, "webpages-dir", "", "directory of webpages dataset lists (default <data-dir>/webpages)")
+	command.Flags().StringVar(&gitdocsCatalog, "gitdocs-catalog", "", "custom gitdocs repository catalog, editable in the dashboard (default <data-dir>/gitdocs.yaml)")
 	command.Flags().IntVar(&downloadWorkers, "download-workers", 3, "concurrent download/update jobs")
 	command.Flags().IntVar(&indexWorkers, "index-workers", 1, "concurrent indexing jobs")
 	command.Flags().IntVar(&downloadConnections, "download-connections", 3, "parallel HTTP ranges shared by downloads")

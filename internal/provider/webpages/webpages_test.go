@@ -400,3 +400,52 @@ func TestShippedADSecurityListParses(t *testing.T) {
 		t.Fatalf("pages=%d pdfs=%d mitre=%d config=%s/%d/%s", len(config.Pages), pdfs, mitre, config.Language, config.Concurrency, config.Delay)
 	}
 }
+
+func TestSourceFileManagement(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	backend := New(dir, "")
+	valid := "name: Mine\npages:\n  - {slug: one, title: One, url: \"https://example.com/one\"}\n"
+	if err := backend.SaveSource("mine", valid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "mine.yaml")); err != nil {
+		t.Fatalf("new list not written as .yaml: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "legacy.json"), []byte(`{"pages":[{"slug":"a","title":"A","url":"https://example.com/a"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := backend.SaveSource("legacy", valid); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "legacy.yaml")); err == nil {
+		t.Fatal("saving an existing .json list created a second .yaml file")
+	}
+	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("pages: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sources, err := backend.Sources()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sources) != 3 || sources[0].ID != "broken" || sources[0].Err == nil || sources[2].ID != "mine" || len(sources[2].Config.Pages) != 1 || sources[1].File != "legacy.json" {
+		t.Fatalf("sources = %+v", sources)
+	}
+	for name, content := range map[string]string{"mine": "pages: []\n", "../escape": valid, "Upper": valid} {
+		if err := backend.SaveSource(name, content); err == nil {
+			t.Fatalf("SaveSource(%q) succeeded", name)
+		}
+	}
+	if content, err := backend.ReadSource("mine"); err != nil || content != valid {
+		t.Fatalf("rejected save changed the file: %q, %v", content, err)
+	}
+	if err := backend.DeleteSource("mine"); err != nil {
+		t.Fatal(err)
+	}
+	if backend.Owns("mine") {
+		t.Fatal("deleted list is still owned")
+	}
+	if err := backend.DeleteSource("../escape"); err == nil {
+		t.Fatal("deleting an invalid name succeeded")
+	}
+}

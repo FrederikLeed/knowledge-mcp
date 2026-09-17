@@ -34,13 +34,26 @@ type Service interface {
 	Subscribe(context.Context) <-chan struct{}
 }
 
+// Sources edits the dataset source definitions. A nil Sources hides the API.
+type Sources interface {
+	ListSources() (model.SourceList, error)
+	ReadSource(kind, id string) (string, error)
+	SaveSource(kind, id, content string) error
+	DeleteSource(kind, id string) error
+}
+
+const maxSourceBytes = 4 << 20
+
 type stateSnapshot struct {
 	Local []model.LocalDataset `json:"local"`
 	Jobs  []model.Job          `json:"jobs"`
 }
 
-func Handler(service Service) http.Handler {
+func Handler(service Service, sources Sources) http.Handler {
 	mux := http.NewServeMux()
+	if sources != nil {
+		registerSources(mux, sources)
+	}
 	mux.HandleFunc("GET /", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.Header().Set("Cache-Control", "no-store")
@@ -161,6 +174,40 @@ func Handler(service Service) http.Handler {
 		writeJSON(w, job, err)
 	})
 	return mux
+}
+
+func registerSources(mux *http.ServeMux, sources Sources) {
+	mux.HandleFunc("GET /api/dashboard/sources", func(w http.ResponseWriter, _ *http.Request) {
+		result, err := sources.ListSources()
+		writeJSON(w, result, err)
+	})
+	mux.HandleFunc("GET /api/dashboard/sources/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		content, err := sources.ReadSource(r.PathValue("kind"), r.PathValue("id"))
+		writeJSON(w, map[string]string{"content": content}, err)
+	})
+	mux.HandleFunc("PUT /api/dashboard/sources/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Knowledge-MCP") != "1" {
+			writeJSONStatus(w, nil, errors.New("missing maintenance request header"), http.StatusForbidden)
+			return
+		}
+		var body struct {
+			Content string `json:"content"`
+		}
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSourceBytes)).Decode(&body); err != nil {
+			writeJSONStatus(w, nil, err, http.StatusBadRequest)
+			return
+		}
+		err := sources.SaveSource(r.PathValue("kind"), r.PathValue("id"), body.Content)
+		writeJSON(w, map[string]bool{"saved": err == nil}, err)
+	})
+	mux.HandleFunc("DELETE /api/dashboard/sources/{kind}/{id}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("X-Knowledge-MCP") != "1" {
+			writeJSONStatus(w, nil, errors.New("missing maintenance request header"), http.StatusForbidden)
+			return
+		}
+		err := sources.DeleteSource(r.PathValue("kind"), r.PathValue("id"))
+		writeJSON(w, map[string]bool{"deleted": err == nil}, err)
+	})
 }
 
 func writeJSON(w http.ResponseWriter, value any, err error) {

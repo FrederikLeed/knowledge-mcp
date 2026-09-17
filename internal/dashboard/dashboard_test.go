@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -89,7 +90,7 @@ func TestWebSocketCoalescesBurstUpdates(t *testing.T) {
 	t.Parallel()
 	updates := make(chan struct{}, 20)
 	service := &fakeService{updates: updates}
-	server := httptest.NewServer(Handler(service))
+	server := httptest.NewServer(Handler(service, nil))
 	defer server.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -120,7 +121,7 @@ func TestWebSocketCoalescesBurstUpdates(t *testing.T) {
 func TestDashboardAndMaintenanceAPI(t *testing.T) {
 	t.Parallel()
 	service := &fakeService{}
-	handler := Handler(service)
+	handler := Handler(service, nil)
 	ctx := context.Background()
 
 	page := httptest.NewRecorder()
@@ -183,7 +184,7 @@ func TestDashboardAndMaintenanceAPI(t *testing.T) {
 
 func TestEmbeddedAssetsAndWebSocketSnapshot(t *testing.T) {
 	t.Parallel()
-	server := httptest.NewServer(Handler(&fakeService{}))
+	server := httptest.NewServer(Handler(&fakeService{}, nil))
 	defer server.Close()
 
 	assetRequest, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/assets/alpinejs-3.16.2.min.js", nil)
@@ -215,5 +216,69 @@ func TestEmbeddedAssetsAndWebSocketSnapshot(t *testing.T) {
 	}
 	if len(snapshot.Local) != 1 || len(snapshot.Jobs) != 1 {
 		t.Fatalf("unexpected snapshot: %#v", snapshot)
+	}
+}
+
+type fakeSources struct {
+	saved map[string]string
+}
+
+func (f *fakeSources) ListSources() (model.SourceList, error) {
+	return model.SourceList{PageLists: []model.PageListSource{{ID: "mine", Pages: 1}}}, nil
+}
+func (f *fakeSources) ReadSource(kind, id string) (string, error) {
+	return f.saved[kind+"/"+id], nil
+}
+func (f *fakeSources) SaveSource(kind, id, content string) error {
+	if content == "" {
+		return errors.New("empty")
+	}
+	f.saved[kind+"/"+id] = content
+	return nil
+}
+func (f *fakeSources) DeleteSource(kind, id string) error {
+	delete(f.saved, kind+"/"+id)
+	return nil
+}
+
+func TestSourcesAPI(t *testing.T) {
+	t.Parallel()
+	sources := &fakeSources{saved: map[string]string{}}
+	handler := Handler(&fakeService{}, sources)
+	do := func(method, path, body string, header bool) *httptest.ResponseRecorder {
+		request := httptest.NewRequest(method, path, strings.NewReader(body))
+		if header {
+			request.Header.Set("X-Knowledge-MCP", "1")
+		}
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder
+	}
+	if response := do(http.MethodGet, "/api/dashboard/sources", "", false); response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"id":"mine"`) {
+		t.Fatalf("list = %d %s", response.Code, response.Body)
+	}
+	if response := do(http.MethodPut, "/api/dashboard/sources/webpages/mine", `{"content":"x"}`, false); response.Code != http.StatusForbidden || len(sources.saved) != 0 {
+		t.Fatalf("save without maintenance header = %d", response.Code)
+	}
+	if response := do(http.MethodDelete, "/api/dashboard/sources/webpages/mine", "", false); response.Code != http.StatusForbidden {
+		t.Fatalf("delete without maintenance header = %d", response.Code)
+	}
+	if response := do(http.MethodPut, "/api/dashboard/sources/webpages/mine", `{"content":"pages"}`, true); response.Code != http.StatusOK || sources.saved["webpages/mine"] != "pages" {
+		t.Fatalf("save = %d %s", response.Code, response.Body)
+	}
+	if response := do(http.MethodPut, "/api/dashboard/sources/webpages/mine", `{"content":""}`, true); response.Code != http.StatusBadRequest || !strings.Contains(response.Body.String(), "empty") {
+		t.Fatalf("invalid save = %d %s", response.Code, response.Body)
+	}
+	if response := do(http.MethodGet, "/api/dashboard/sources/webpages/mine", "", false); !strings.Contains(response.Body.String(), `"content":"pages"`) {
+		t.Fatalf("read = %s", response.Body)
+	}
+	if response := do(http.MethodDelete, "/api/dashboard/sources/webpages/mine", "", true); response.Code != http.StatusOK || len(sources.saved) != 0 {
+		t.Fatalf("delete = %d", response.Code)
+	}
+	// Without a sources backend the API is absent.
+	recorder := httptest.NewRecorder()
+	Handler(&fakeService{}, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/dashboard/sources", nil))
+	if strings.HasPrefix(recorder.Header().Get("Content-Type"), "application/json") {
+		t.Fatal("sources API served without a backend")
 	}
 }

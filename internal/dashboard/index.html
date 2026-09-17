@@ -55,6 +55,8 @@
       .catalog-table .catalog-action { position: absolute; top: .5rem; right: .6rem; width: 2rem; }
       .catalog-table .catalog-variant { width: min(100%, 12rem); margin-top: .25rem; }
     }
+    .source-editor { font-family: var(--bs-font-monospace); font-size: .8rem; min-height: 22rem; white-space: pre; }
+    .source-sites { max-width: 22rem; }
   </style>
 </head>
 <body>
@@ -120,6 +122,35 @@
     <div class="empty" x-show="hydrated && !filteredJobs.length"><span><i class="bi bi-funnel me-2"></i>No matching jobs</span></div>
   </section>
 
+  <section class="surface border rounded-4 overflow-hidden mb-3">
+    <div class="d-flex flex-wrap align-items-center gap-2 px-3 py-2 border-bottom"><h2 class="h6 mb-0 me-auto"><i class="bi bi-collection section-icon me-2"></i>Sources</h2><div class="btn-group btn-group-sm" role="group" aria-label="Source type"><button type="button" class="btn" :class="sourceTab === 'pages' ? 'btn-primary' : 'btn-outline-secondary'" @click="sourceTab = 'pages'"><i class="bi bi-globe2 me-1"></i>Web page lists<span class="badge rounded-pill ms-1" :class="sourceTab === 'pages' ? 'text-bg-light' : 'text-bg-secondary'" x-text="sources.page_lists.length"></span></button><button type="button" class="btn" :class="sourceTab === 'repos' ? 'btn-primary' : 'btn-outline-secondary'" @click="sourceTab = 'repos'"><i class="bi bi-github me-1"></i>GitHub repositories<span class="badge rounded-pill ms-1" :class="sourceTab === 'repos' ? 'text-bg-light' : 'text-bg-secondary'" x-text="sources.repos.length"></span></button></div><button class="btn btn-sm btn-outline-primary" x-show="sourceTab === 'pages'" data-bs-toggle="modal" data-bs-target="#sourceEditorModal" @click="newPageList()"><i class="bi bi-plus-lg me-1"></i>New page list</button><button class="btn btn-sm btn-outline-primary" x-show="sourceTab === 'repos'" data-bs-toggle="modal" data-bs-target="#sourceEditorModal" @click="openEditor('gitdocs', 'custom')"><i class="bi bi-pencil me-1"></i>Edit my repositories</button></div>
+    <div class="alert alert-warning rounded-0 border-0 border-bottom py-2 mb-0 small" x-show="sourceTab === 'repos' && sources.repo_file_error"><i class="bi bi-exclamation-triangle me-2"></i>The custom repository list is not loaded: <span x-text="sources.repo_file_error"></span></div>
+    <div class="table-responsive" x-show="sourceTab === 'pages' && sources.page_lists.length">
+      <table class="table table-hover"><thead><tr><th>Page list</th><th>Pages</th><th>Sites</th><th>Status</th><th class="text-end">Actions</th></tr></thead>
+        <tbody><template x-for="list in sources.page_lists" :key="list.id"><tr>
+          <td><div class="fw-semibold" x-text="list.name || list.id"></div><div class="small text-body-secondary" x-text="list.description"></div><div class="small text-body-secondary"><code x-text="list.file"></code><span class="mx-1" x-show="list.language">·</span><span x-text="list.language"></span></div></td>
+          <td x-text="number(list.pages)"></td>
+          <td class="small text-body-secondary source-sites" x-text="(list.sites || []).slice(0, 3).join(', ') + ((list.sites || []).length > 3 ? ` +${list.sites.length - 3}` : '')"></td>
+          <td><span class="badge rounded-pill fw-normal" :class="list.error ? 'text-bg-danger' : sourceInstalled(list.id) ? 'text-bg-success' : 'text-bg-secondary'" x-text="list.error ? 'invalid' : sourceInstalled(list.id) ? 'installed' : 'not downloaded'"></span><div class="small text-danger text-wrap" x-show="list.error" x-text="list.error"></div></td>
+          <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-primary btn-icon rounded-circle ms-1" :disabled="Boolean(list.error) || busy(list.id)" :title="sourceAction(list.id).label" :aria-label="sourceAction(list.id).label" @click="maintain(list.id, sourceAction(list.id).action)"><i :class="busy(list.id) ? 'bi bi-hourglass-split' : sourceAction(list.id).icon"></i></button><button class="btn btn-sm btn-outline-secondary btn-icon rounded-circle ms-1" title="Edit page list" :aria-label="`Edit ${list.id}`" data-bs-toggle="modal" data-bs-target="#sourceEditorModal" @click="openEditor('webpages', list.id)"><i class="bi bi-pencil"></i></button><button class="btn btn-sm btn-outline-danger btn-icon rounded-circle ms-1" title="Delete page list file" :aria-label="`Delete page list ${list.id}`" @click="deletePageList(list)"><i class="bi bi-x-lg"></i></button></td>
+        </tr></template></tbody>
+      </table>
+    </div>
+    <div class="empty" x-show="sourceTab === 'pages' && sourcesLoaded && !sources.page_lists.length"><span><i class="bi bi-globe2 me-2"></i>No page lists yet</span></div>
+    <div x-show="sourceTab === 'repos'">
+      <div class="p-2 border-bottom"><div class="input-group input-group-sm"><span class="input-group-text"><i class="bi bi-search"></i></span><input class="form-control" type="search" placeholder="Filter repositories" x-model="repoFilter" aria-label="Filter repositories" /></div></div>
+      <div class="table-responsive"><table class="table table-hover"><thead><tr><th>Repository</th><th>Paths</th><th>Origin</th><th class="text-end">Actions</th></tr></thead>
+        <tbody><template x-for="repo in filteredRepos" :key="repo.id"><tr>
+          <td><div class="fw-semibold" x-text="repo.name"></div><div class="small text-body-secondary"><a class="link-secondary" :href="`https://github.com/${repo.repo}`" target="_blank" rel="noopener noreferrer" x-text="repo.repo"></a><span x-show="repo.branch" x-text="` @ ${repo.branch}`"></span><span class="mx-1">·</span><code x-text="repo.id"></code></div></td>
+          <td class="small text-body-secondary" x-text="(repo.include || []).join(', ')"></td>
+          <td><span class="badge fw-normal" :class="repo.custom ? 'text-bg-info' : 'text-bg-secondary'" x-text="repo.custom ? 'custom' : 'built-in'"></span><span class="badge fw-normal text-bg-success ms-1" x-show="sourceInstalled(repo.id)">installed</span></td>
+          <td class="text-end text-nowrap"><button class="btn btn-sm btn-outline-primary btn-icon rounded-circle" :disabled="busy(repo.id)" :title="sourceAction(repo.id).label" :aria-label="sourceAction(repo.id).label" @click="maintain(repo.id, sourceAction(repo.id).action)"><i :class="busy(repo.id) ? 'bi bi-hourglass-split' : sourceAction(repo.id).icon"></i></button></td>
+        </tr></template></tbody>
+      </table></div>
+      <div class="empty" x-show="!filteredRepos.length"><span><i class="bi bi-search me-2"></i>No matching repositories</span></div>
+    </div>
+  </section>
+
 <div class="modal fade" id="onlineDatasetsModal" tabindex="-1" aria-labelledby="onlineDatasetsTitle" aria-hidden="true">
   <div class="modal-dialog modal-lg catalog-modal modal-dialog-scrollable"><div class="modal-content surface border rounded-4">
     <div class="modal-header py-2"><div><h2 class="modal-title h6 mb-0" id="onlineDatasetsTitle"><i class="bi bi-cloud-arrow-down section-icon me-2"></i>Download a dataset</h2><div class="small text-body-secondary" x-text="`${number(available.length)} of ${number(availableTotal)} matching datasets`"></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
@@ -156,14 +187,39 @@
     </div>
   </div></div>
 </div>
+<div class="modal fade" id="sourceEditorModal" tabindex="-1" aria-labelledby="sourceEditorTitle" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content surface border rounded-4">
+    <div class="modal-header py-2"><div><h2 class="modal-title h6 mb-0" id="sourceEditorTitle"><i class="bi bi-pencil-square section-icon me-2"></i><span x-text="editor.kind === 'gitdocs' ? 'My GitHub repositories' : editor.isNew ? 'New page list' : `Page list ${editor.id}`"></span></h2><div class="small text-body-secondary" x-text="editor.kind === 'gitdocs' ? 'Added to the built-in repositories. Each entry becomes one dataset named owner-repo.' : 'Each file is one dataset named after the file. Pages are refetched at most weekly.'"></div></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+    <div class="modal-body">
+      <div class="alert alert-danger py-2 small" x-show="editor.error"><i class="bi bi-exclamation-triangle me-2"></i><span x-text="editor.error"></span></div>
+      <div class="mb-2" x-show="editor.isNew"><label class="form-label small" for="sourceName">Dataset name</label><input id="sourceName" class="form-control form-control-sm" placeholder="e.g. my-topic (lowercase letters, digits, - _ .)" x-model="editor.id" /></div>
+      <div class="row g-2 align-items-end mb-2" x-show="editor.kind === 'webpages'">
+        <div class="col-sm-5"><label class="form-label small" for="addPageUrl">Page URL</label><input id="addPageUrl" class="form-control form-control-sm" type="url" placeholder="https://…" x-model="editor.addUrl" /></div>
+        <div class="col-sm-4"><label class="form-label small" for="addPageTitle">Title</label><input id="addPageTitle" class="form-control form-control-sm" x-model="editor.addTitle" /></div>
+        <div class="col-sm-2"><div class="form-check"><input id="addPagePdf" class="form-check-input" type="checkbox" x-model="editor.addPdf" /><label class="form-check-label small" for="addPagePdf">PDF</label></div></div>
+        <div class="col-sm-1"><button type="button" class="btn btn-sm btn-outline-primary w-100" title="Append page" aria-label="Append page" @click="appendPage()"><i class="bi bi-plus-lg"></i></button></div>
+      </div>
+      <div class="row g-2 align-items-end mb-2" x-show="editor.kind === 'gitdocs'">
+        <div class="col-sm-5"><label class="form-label small" for="addRepo">Repository (owner/name)</label><input id="addRepo" class="form-control form-control-sm" placeholder="owner/name or GitHub URL" x-model="editor.addRepo" /></div>
+        <div class="col-sm-6"><label class="form-label small" for="addInclude">Include paths (comma separated)</label><input id="addInclude" class="form-control form-control-sm" x-model="editor.addInclude" /></div>
+        <div class="col-sm-1"><button type="button" class="btn btn-sm btn-outline-primary w-100" title="Append repository" aria-label="Append repository" @click="appendRepo()"><i class="bi bi-plus-lg"></i></button></div>
+      </div>
+      <textarea class="form-control source-editor" spellcheck="false" x-model="editor.content" aria-label="Source file contents"></textarea>
+      <div class="small text-body-secondary mt-2" x-show="editor.kind === 'webpages'">Fields: <code>name</code>, <code>description</code>, <code>language</code> (en/da), <code>topics</code>, <code>concurrency</code>, <code>delay</code>, and <code>pages</code> entries with <code>slug</code>, <code>title</code>, <code>url</code>, optional <code>type: pdf</code>.</div>
+      <div class="small text-body-secondary mt-2" x-show="editor.kind === 'gitdocs'">Per entry: <code>repo</code>, <code>include</code> globs (required, <code>**</code> spans folders), optional <code>id</code>, <code>branch</code>, <code>name</code>, <code>description</code>, <code>topics</code>, <code>exclude</code>, <code>url_rules</code>. Set <code>GITHUB_TOKEN</code> to avoid API rate limits.</div>
+    </div>
+    <div class="modal-footer py-2"><button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button><button type="button" class="btn btn-sm btn-outline-primary" :disabled="editor.saving" @click="saveSource(false)"><i class="bi bi-check-lg me-1"></i>Save</button><button type="button" class="btn btn-sm btn-primary" x-show="editor.kind === 'webpages'" :disabled="editor.saving" @click="saveSource(true)"><i class="bi bi-cloud-arrow-down me-1"></i>Save and fetch</button></div>
+  </div></div>
+</div>
 </main>
 
 <script>
 document.addEventListener('alpine:init', () => Alpine.data('dashboard', () => ({
-  local: [], jobs: [], hydrated: false, upgrades: [], upgradesLoaded: false, upgradesLoading: false, available: [], availableLanguages: [], availableSources: [], availableTotal: 0, availableNextOffset: 0, availableHasMore: true, availableLoading: false, availableRequest: 0, operational: {providers:[]}, settingsDraft: {download_workers:3,index_workers:1,indexing_parallelism:8,update_check_hours:24,automatically_update:false}, filter: '', sourceFilter: '', languageFilter: '', hideInstalled: false, jobFilter: 'running', connected: false, error: '', socket: null, reconnectDelay: 1000, catalogFilterStorageKey: 'knowledgeDatasetCatalogFilters.v1',
+  local: [], jobs: [], hydrated: false, upgrades: [], upgradesLoaded: false, upgradesLoading: false, available: [], availableLanguages: [], availableSources: [], availableTotal: 0, availableNextOffset: 0, availableHasMore: true, availableLoading: false, availableRequest: 0, operational: {providers:[]}, sources: {repos:[], page_lists:[]}, sourcesLoaded: false, sourceTab: 'pages', repoFilter: '', editor: {kind:'', id:'', isNew:false, content:'', error:'', saving:false, addUrl:'', addTitle:'', addPdf:false, addRepo:'', addInclude:'**/*.md'}, settingsDraft: {download_workers:3,index_workers:1,indexing_parallelism:8,update_check_hours:24,automatically_update:false}, filter: '', sourceFilter: '', languageFilter: '', hideInstalled: false, jobFilter: 'running', connected: false, error: '', socket: null, reconnectDelay: 1000, catalogFilterStorageKey: 'knowledgeDatasetCatalogFilters.v1',
   terminal: ['downloaded','ready','up_to_date','failed','canceled'],
 	jobFilterOptions: [{value:'all', label:'All', icon:'bi bi-grid'}, {value:'running', label:'Running', icon:'bi bi-play-circle'}, {value:'queued', label:'Queued', icon:'bi bi-hourglass'}, {value:'failed', label:'Failed', icon:'bi bi-exclamation-circle'}, {value:'completed', label:'Completed', icon:'bi bi-check-circle'}],
-  init() { this.restoreCatalogFilters(); this.connect(); this.loadUpgrades(); },
+  init() { this.restoreCatalogFilters(); this.connect(); this.loadUpgrades(); this.loadSources(); },
+  get filteredRepos() { const filter = this.repoFilter.trim().toLowerCase(); return this.sources.repos.filter(repo => !filter || [repo.id, repo.repo, repo.name, repo.description].join(' ').toLowerCase().includes(filter)); },
   get outstandingJobs() { return this.jobs.filter(job => !this.terminal.includes(job.state)); },
   get runningJobs() { return this.jobs.filter(job => ['discovering','downloading','verifying','title_indexing','body_indexing'].includes(job.state)); },
   get filteredJobs() { return this.jobs.filter(job => this.jobFilterMatches(job, this.jobFilter)); },
@@ -211,6 +267,42 @@ document.addEventListener('alpine:init', () => Alpine.data('dashboard', () => ({
       if (request === this.availableRequest) this.availableLoading = false;
     }
   },
+  async loadSources() { try { this.sources = await this.api('/api/dashboard/sources'); } catch (error) { this.error = error.message; } finally { this.sourcesLoaded = true; } },
+  sourceInstalled(id) { return this.local.some(dataset => dataset.dataset === id); },
+  sourceAction(id) { return this.sourceInstalled(id) ? {action:'update', label:'Refetch and reindex', icon:'bi bi-arrow-repeat'} : {action:'download', label:'Download dataset', icon:'bi bi-cloud-arrow-down'}; },
+  resetEditor(kind, id, isNew) { this.editor = {kind, id, isNew, content:'', error:'', saving:false, addUrl:'', addTitle:'', addPdf:false, addRepo:'', addInclude:'**/*.md'}; },
+  newPageList() { this.resetEditor('webpages', '', true); this.editor.content = 'name: My page list\ndescription: What these pages cover.\nlanguage: en\ntopics: []\npages:\n'; },
+  async openEditor(kind, id) { this.resetEditor(kind, id, false); try { this.editor.content = (await this.api(`/api/dashboard/sources/${kind}/${encodeURIComponent(id)}`)).content; } catch (error) { this.editor.error = error.message; } },
+  slugify(value) { return String(value).normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/æ/g, 'ae').replace(/ø/g, 'oe').replace(/å/g, 'aa').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 100); },
+  appendLine(line) { const content = this.editor.content; this.editor.content = (content && !content.endsWith('\n') ? content + '\n' : content) + line + '\n'; },
+  appendPage() {
+    const url = this.editor.addUrl.trim(); if (!/^https?:\/\//i.test(url)) { this.editor.error = 'Enter an http(s) page URL.'; return; }
+    let title = this.editor.addTitle.trim(); if (!title) { try { const parsed = new URL(url); title = decodeURIComponent(parsed.pathname.split('/').filter(Boolean).pop() || parsed.host); } catch (_) { title = url; } }
+    const used = new Set([...this.editor.content.matchAll(/slug:\s*"?([a-z0-9._-]+)/g)].map(match => match[1])); const base = this.slugify(title) || 'page'; let slug = base; for (let n = 2; used.has(slug); n++) slug = `${base}-${n}`;
+    this.appendLine(`  - {slug: ${slug}, title: ${JSON.stringify(title)}, url: ${JSON.stringify(url)}${this.editor.addPdf ? ', type: pdf' : ''}}`);
+    this.editor.addUrl = ''; this.editor.addTitle = ''; this.editor.addPdf = false; this.editor.error = '';
+  },
+  appendRepo() {
+    const repo = this.editor.addRepo.trim().replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '').split('/').slice(0, 2).join('/');
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repo)) { this.editor.error = 'Enter a repository as owner/name.'; return; }
+    const include = this.editor.addInclude.split(',').map(glob => glob.trim()).filter(Boolean); if (!include.length) { this.editor.error = 'Enter at least one include path.'; return; }
+    if (!/^\s*datasets\s*:/m.test(this.editor.content)) this.appendLine('datasets:');
+    this.appendLine(`  - repo: ${repo}\n    include: [${include.map(glob => JSON.stringify(glob)).join(', ')}]`);
+    this.editor.addRepo = ''; this.editor.error = '';
+  },
+  async saveSource(fetchAfter) {
+    const {kind} = this.editor, id = kind === 'gitdocs' ? 'custom' : this.editor.id.trim();
+    if (this.editor.isNew && this.sources.page_lists.some(list => list.id === id)) { this.editor.error = `A page list named ${id} already exists.`; return; }
+    this.editor.saving = true; this.editor.error = '';
+    try {
+      await this.api(`/api/dashboard/sources/${kind}/${encodeURIComponent(id)}`, {method:'PUT', headers:{'Content-Type':'application/json','X-Knowledge-MCP':'1'}, body:JSON.stringify({content:this.editor.content})});
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('sourceEditorModal')).hide();
+      await this.loadSources();
+      if (fetchAfter) await this.maintain(id, this.sourceAction(id).action);
+      if (this.available.length) this.resetAvailable(true);
+    } catch (error) { this.editor.error = error.message; } finally { this.editor.saving = false; }
+  },
+  async deletePageList(list) { if (!window.confirm(`Delete the page list file ${list.file}? Downloaded data stays until you delete the dataset.`)) return; try { await this.api(`/api/dashboard/sources/webpages/${encodeURIComponent(list.id)}`, {method:'DELETE', headers:{'X-Knowledge-MCP':'1'}}); await this.loadSources(); } catch (error) { this.error = error.message; } },
   async maintain(dataset, action, variant = '') { try { const job = await this.api(`/api/dashboard/dataset/${encodeURIComponent(dataset)}/${action}?variant=${encodeURIComponent(variant || '')}`, {method:'POST', headers:{'X-Knowledge-MCP':'1'}}); this.mergeJob(job); this.error = ''; } catch (error) { this.error = error.message; } },
   async deleteDataset(dataset) { if (!window.confirm(`Delete ${dataset.dataset} and permanently remove ${this.bytes(dataset.disk_bytes)} of local data?`)) return; try { await this.api(`/api/dashboard/dataset/${encodeURIComponent(dataset.dataset)}/delete`, {method:'POST', headers:{'X-Knowledge-MCP':'1'}}); this.local = this.local.filter(item => item.dataset !== dataset.dataset); await Promise.all([this.loadUpgrades(), this.available.length ? this.resetAvailable() : Promise.resolve()]); } catch (error) { this.error = error.message; } },
   async controlJob(id, action) { try { await this.api(`/api/dashboard/job/${encodeURIComponent(id)}/${action}`, {method:'POST', headers:{'X-Knowledge-MCP':'1'}}); } catch (error) { this.error = error.message; } },
