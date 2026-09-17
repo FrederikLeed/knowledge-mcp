@@ -103,6 +103,18 @@ func normalizeURL(raw string) string {
 	return parsed.String()
 }
 
+// urlKey identifies a page for deduplication: sites serve "/a" and "/a/"
+// as the same page.
+func urlKey(raw string) string {
+	key := normalizeURL(raw)
+	if parsed, err := url.Parse(key); err == nil && parsed.Path != "/" && strings.HasSuffix(parsed.Path, "/") {
+		parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+		parsed.RawPath = ""
+		return parsed.String()
+	}
+	return key
+}
+
 var slugCleaner = regexp.MustCompile(`[^a-z0-9]+`)
 
 // slugForURL derives a stable dataset-unique slug from a URL.
@@ -192,17 +204,18 @@ func (p *WebPages) crawl(ctx context.Context, config Config, crawl *Crawl, rawDi
 	var frontier []item
 	enqueue := func(raw, title string, depth int) {
 		target := normalizeURL(raw)
-		if seen[target] || crawl.excluded(target) || !allowed(target) {
+		key := urlKey(target)
+		if seen[key] || crawl.excluded(target) || !allowed(target) {
 			return
 		}
-		if static, ok := state.known[target]; ok && static.Type == TypePDF {
+		if static, ok := state.known[key]; ok && static.Type == TypePDF {
 			return
 		}
 		isDoc := hasPrefix(target, crawl.Documents) || strings.EqualFold(path.Ext(pathOf(target)), ".pdf") && hasPrefix(target, crawl.Include)
 		if !isDoc && !hasPrefix(target, crawl.Include) {
 			return
 		}
-		seen[target] = true
+		seen[key] = true
 		if genericLinkText.MatchString(strings.TrimSpace(title)) || len(title) > 200 {
 			title = ""
 		}
@@ -243,7 +256,7 @@ func (p *WebPages) crawl(ctx context.Context, config Config, crawl *Crawl, rawDi
 				defer wg.Done()
 				for index := range tasks {
 					current := batch[index]
-					page, static := state.known[current.url]
+					page, static := state.known[urlKey(current.url)]
 					if !static {
 						mu.Lock()
 						slug := slugForURL(current.url, used)

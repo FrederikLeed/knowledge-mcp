@@ -36,11 +36,11 @@ func newCrawlSite(t *testing.T) (*httptest.Server, map[string]int, *sync.Mutex) 
 		case "/sitemap.xml":
 			_, _ = response.Write([]byte(`<?xml version="1.0"?><urlset><url><loc>` + server.URL + `/regler/fra-sitemap</loc></url><url><loc>` + server.URL + `/nyheder/x</loc></url></urlset>`))
 		case "/regler/":
-			htmlPage(`<h1>Regler</h1><a href="/regler/spilletid#top">Spilletid</a> <a href="spilletid">igen</a>
+			htmlPage(`<h1>Regler</h1><a href="/regler/spilletid/#top">Spilletid</a> <a href="spilletid">igen</a>
 <a href="/regler/privat/a">privat</a> <a href="/regler/spilletid?print=1">print</a> <a href="/nyheder/">nyheder</a>
 <a href="/regler/original">original</a> <a href="/regler/arkiv/gammel">arkiv</a> <a href="/assets/abc-123">Ungdoms-DM regler</a> <a href="/regler/billede.png">billede</a>
 <a href="mailto:x@example.test">mail</a> <a href="/regler/dyb/1">dyb</a> <a href="/assets/u16">Download</a> <a href="/regler/spejl">spejl</a>`)
-		case "/regler/spilletid":
+		case "/regler/spilletid", "/regler/spilletid/":
 			htmlPage(`<h1>Spilletid</h1><p>U15 spiller 2x40 minutter.</p><a href="/regler/">tilbage</a> <a href="/regler/kun-fra-statisk">kun her</a>`)
 		case "/regler/kun-fra-statisk":
 			htmlPage(`<h1>Kun linket fra den statiske side</h1><p>` + longText + `</p>`)
@@ -139,6 +139,9 @@ crawl:
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	if urlKey("https://A.test:443/x/?q=1") != "https://a.test/x?q=1" || urlKey("https://a.test/") != "https://a.test/" || urlKey("https://a.test") != "https://a.test/" {
+		t.Errorf("urlKey = %q %q %q", urlKey("https://A.test:443/x/?q=1"), urlKey("https://a.test/"), urlKey("https://a.test"))
+	}
 	for name, want := range map[string]string{"Cirkulaere-nr.-13.pdf": "Cirkulaere nr. 13", "Regler%20U15.pdf": "Regler U15", "x": "x"} {
 		if got := titleFromFilename(name); got != want {
 			t.Errorf("titleFromFilename(%q) = %q, want %q", name, got, want)

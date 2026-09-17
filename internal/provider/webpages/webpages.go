@@ -519,7 +519,7 @@ func (p *WebPages) Acquire(ctx context.Context, collection, _ string, value prov
 		known := map[string]Page{}
 		used := map[string]string{}
 		for _, page := range config.Pages {
-			known[normalizeURL(page.URL)] = page
+			known[urlKey(page.URL)] = page
 			used[page.Slug] = page.URL
 		}
 		cached := func(page Page) (pageEntry, bool) {
