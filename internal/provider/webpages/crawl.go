@@ -234,6 +234,7 @@ func (p *WebPages) crawl(ctx context.Context, config Config, crawl *Crawl, rawDi
 			digest string
 		}
 		outcomes := make([]outcome, len(batch))
+		fetchedPages := 0
 		tasks := make(chan int)
 		var wg sync.WaitGroup
 		for range min(config.Concurrency, len(batch)) {
@@ -280,6 +281,10 @@ func (p *WebPages) crawl(ctx context.Context, config Config, crawl *Crawl, rawDi
 						links = pageLinks(body, firstNonEmpty(entry.ResolvedURL, page.URL))
 					}
 					outcomes[index] = outcome{result: crawlResult{page: page, entry: &entry, static: static}, links: links, digest: contentDigest(body, entry)}
+					mu.Lock()
+					fetchedPages++
+					progress(len(results)+fetchedPages, fmt.Sprintf("crawling %s (%d pages checked)", crawl.Include[0], len(results)+fetchedPages))
+					mu.Unlock()
 				}
 			}()
 		}

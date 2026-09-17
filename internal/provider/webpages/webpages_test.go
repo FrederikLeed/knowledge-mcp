@@ -2,6 +2,7 @@ package webpages
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -494,8 +495,8 @@ func TestPDFMarkdown(t *testing.T) {
 			t.Fatalf("markdown lacks %q:\n%s", want, markdown)
 		}
 	}
-	if strings.Contains(markdown, header) {
-		t.Fatalf("running header was kept:\n%s", markdown)
+	if strings.Count(markdown, header) != 1 {
+		t.Fatalf("running header should appear exactly once:\n%s", markdown)
 	}
 	// A short document keeps lines that merely repeat.
 	if short := PDFMarkdown("Bilag\f§ 2  Bilag", "Kort", "u"); !strings.Contains(short, "Bilag\n") {
@@ -515,5 +516,80 @@ func TestPdftotextExtractsText(t *testing.T) {
 	}
 	if _, err := pdftotext(context.Background(), []byte("not a pdf")); err == nil {
 		t.Fatal("pdftotext accepted a non-PDF")
+	}
+}
+
+func TestLongDocumentsAreIndexedInParts(t *testing.T) {
+	t.Parallel()
+	chapter := func(name, sentence string) string {
+		return "## " + name + "\n\n" + strings.Repeat("Almindelig tekst om turneringen. ", 150) + "\n\n" + sentence + "\n\n"
+	}
+	text := "Turneringsregler\n\n" + chapter("I. Navn", "Turneringen hedder Ungdoms-DM.") + "## II. Kort\n\nKun en linje.\n\n" + chapter("VII. Kampenes afvikling", "I U15-rækkerne spilles der 2x40 minutter.") + chapter("X. Stor", strings.Repeat("Lang paragraf om sanktioner og bøder. ", 400))
+	dir := t.TempDir()
+	raw := filepath.Join(dir, rawDirectory)
+	if err := os.MkdirAll(raw, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(raw, "udm.pdf.txt"), []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(raw, "kort.html"), []byte("<main><h1>Kort side</h1><p>Kort.</p></main>"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries := []pageEntry{
+		{Page: Page{Slug: "udm", Title: "Ungdoms-DM regler", URL: "https://x.test/udm", Type: TypePDF}, Status: statusOK, File: "udm.pdf.txt"},
+		{Page: Page{Slug: "kort", URL: "https://x.test/kort", Type: TypeHTML}, Status: statusOK, File: "kort.html"},
+	}
+	data, _ := json.Marshal(documentIndex{Dataset: "t", Entries: entries})
+	if err := os.WriteFile(filepath.Join(dir, documentsFile), data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	corpus, err := New("", "").OpenCorpus(dir, model.Manifest{Dataset: "t"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var records []sourceprovider.Record
+	var boundaries []bool
+	if err := corpus.ScanBodies(context.Background(), "", sourceprovider.ScanOptions{}, func(record sourceprovider.Record, position sourceprovider.ScanPosition) error {
+		records = append(records, record)
+		boundaries = append(boundaries, position.Boundary)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var titles []string
+	for _, record := range records {
+		titles = append(titles, record.ID+"="+record.Title)
+	}
+	// The short chapter II merges into chapter I; chapter X is cut into
+	// paragraph-sized chunks; the short HTML page is not split.
+	want := []string{
+		"udm=Ungdoms-DM regler",
+		"udm--part-1=Ungdoms-DM regler (part 1 of 5)",
+		"udm--part-2=Ungdoms-DM regler — I. Navn",
+		"udm--part-3=Ungdoms-DM regler — VII. Kampenes afvikling",
+		"udm--part-4=Ungdoms-DM regler — X. Stor (1/2)",
+		"udm--part-5=Ungdoms-DM regler — X. Stor (2/2)",
+		"kort=Kort side",
+	}
+	if strings.Join(titles, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("records:\n%s\nwant:\n%s", strings.Join(titles, "\n"), strings.Join(want, "\n"))
+	}
+	if boundaries[0] || boundaries[4] || !boundaries[5] || !boundaries[6] {
+		t.Fatalf("boundaries = %v; only the last record of a page may be a boundary", boundaries)
+	}
+	if !strings.Contains(records[3].Body, "2x40 minutter") || strings.Contains(records[3].Body, "hedder Ungdoms-DM") || !strings.Contains(records[2].Body, "Kun en linje") {
+		t.Fatalf("part bodies are wrong: %q / %q", records[3].Body[:80], records[2].Body[:80])
+	}
+	document, err := corpus.Read(context.Background(), records[3], model.ReadOptions{})
+	if err != nil || document.ID != "udm--part-3" || document.Title != "Ungdoms-DM regler — VII. Kampenes afvikling" || !strings.Contains(document.Content, "**Part:** 3 of 5") || !strings.Contains(document.Content, "2x40") || strings.Contains(document.Content, "hedder Ungdoms-DM") {
+		t.Fatalf("part read = %#v, %v", document, err)
+	}
+	if _, err := corpus.Read(context.Background(), sourceprovider.Record{ID: "udm--part-9"}, model.ReadOptions{}); err == nil {
+		t.Fatal("reading a missing part succeeded")
+	}
+	whole, err := corpus.Read(context.Background(), sourceprovider.Record{ID: "udm"}, model.ReadOptions{MaxChars: 100000})
+	if err != nil || !strings.Contains(whole.Content, "hedder Ungdoms-DM") || !strings.Contains(whole.Content, "2x40") {
+		t.Fatalf("whole read = %v", err)
 	}
 }

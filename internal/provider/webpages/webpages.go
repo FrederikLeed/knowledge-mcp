@@ -937,12 +937,9 @@ func (c *corpus) scan(ctx context.Context, after string, bodies bool, sink provi
 			return err
 		}
 		entry := c.entries[index]
-		body, title := "", entry.Title
-		if bodies || title == "" {
-			var err error
-			if body, title, err = c.render(entry); err != nil {
-				return err
-			}
+		body, title, err := c.render(entry)
+		if err != nil {
+			return err
 		}
 		record := provider.Record{ID: entry.Slug, Title: title, URL: entry.URL, Locator: entry.Slug, Primary: true, Identifiers: []string{entry.Slug}, Keywords: []string{c.dataset}, RankWeight: 1, Metadata: map[string]string{"type": entry.Type, "fetched_at": entry.FetchedAt}}
 		if entry.Type == TypePDF {
@@ -951,14 +948,123 @@ func (c *corpus) scan(ctx context.Context, after string, bodies bool, sink provi
 				record.RankWeight = 0.6
 			}
 		}
-		if bodies {
-			record.Body = body
+		// Long documents are also indexed part by part, so a paragraph
+		// deep inside a rulebook ranks like a page of its own.
+		parts := splitParts(body)
+		records := []provider.Record{record}
+		for number, part := range parts {
+			partRecord := record
+			partRecord.ID = partID(entry.Slug, number+1)
+			partRecord.Locator, partRecord.Identifiers = partRecord.ID, []string{partRecord.ID}
+			partRecord.Title = partTitle(title, part.heading, number+1, len(parts))
+			partRecord.Body = part.text
+			records = append(records, partRecord)
 		}
-		if err := sink(record, provider.ScanPosition{Cursor: strconv.Itoa(index + 1), Completed: int64(index + 1), Total: int64(len(c.entries)), Units: "pages", Boundary: true}); err != nil {
-			return err
+		if bodies {
+			records[0].Body = body
+		}
+		for position, current := range records {
+			last := position == len(records)-1
+			if err := sink(current, provider.ScanPosition{Cursor: strconv.Itoa(index + 1), Completed: int64(index + 1), Total: int64(len(c.entries)), Units: "pages", Boundary: last}); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
+}
+
+const (
+	partThreshold = 12000
+	partTarget    = 8000
+	partMinimum   = 1500
+	partSeparator = "--part-"
+)
+
+type part struct {
+	heading string
+	text    string
+}
+
+func partID(slug string, number int) string {
+	return slug + partSeparator + strconv.Itoa(number)
+}
+
+func partTitle(title, heading string, number, total int) string {
+	if heading != "" {
+		return title + " — " + heading
+	}
+	return fmt.Sprintf("%s (part %d of %d)", title, number, total)
+}
+
+// splitParts divides a long Markdown body at its level-two headings, merging
+// short sections and cutting oversized ones at paragraph breaks. Short
+// bodies are not split.
+func splitParts(body string) []part {
+	if len(body) <= partThreshold {
+		return nil
+	}
+	var sections []part
+	current := part{}
+	var text strings.Builder
+	flush := func() {
+		if strings.TrimSpace(text.String()) != "" {
+			current.text = strings.TrimSpace(text.String())
+			sections = append(sections, current)
+		}
+		text.Reset()
+	}
+	for _, line := range strings.SplitAfter(body, "\n") {
+		if strings.HasPrefix(line, "## ") {
+			flush()
+			current = part{heading: strings.TrimSpace(strings.TrimPrefix(line, "## "))}
+		}
+		text.WriteString(line)
+	}
+	flush()
+	var merged []part
+	for _, section := range sections {
+		if len(merged) > 0 && len(section.text) < partMinimum && len(merged[len(merged)-1].text)+len(section.text) <= partTarget {
+			merged[len(merged)-1].text += "\n\n" + section.text
+			continue
+		}
+		merged = append(merged, section)
+	}
+	var parts []part
+	for _, section := range merged {
+		if len(section.text) <= partThreshold {
+			parts = append(parts, section)
+			continue
+		}
+		chunks := chunkParagraphs(section.text, partTarget)
+		for index, chunk := range chunks {
+			heading := section.heading
+			if heading != "" && len(chunks) > 1 {
+				heading = fmt.Sprintf("%s (%d/%d)", heading, index+1, len(chunks))
+			}
+			parts = append(parts, part{heading: heading, text: chunk})
+		}
+	}
+	if len(parts) < 2 {
+		return nil
+	}
+	return parts
+}
+
+func chunkParagraphs(text string, target int) []string {
+	var chunks []string
+	var current strings.Builder
+	for _, paragraph := range strings.Split(text, "\n\n") {
+		if current.Len() > 0 && current.Len()+len(paragraph) > target {
+			chunks = append(chunks, strings.TrimSpace(current.String()))
+			current.Reset()
+		}
+		current.WriteString(paragraph)
+		current.WriteString("\n\n")
+	}
+	if strings.TrimSpace(current.String()) != "" {
+		chunks = append(chunks, strings.TrimSpace(current.String()))
+	}
+	return chunks
 }
 
 // render returns the Markdown body and effective title of a page.
@@ -993,7 +1099,13 @@ func firstNonEmpty(values ...string) string {
 }
 
 func (c *corpus) Read(_ context.Context, record provider.Record, options model.ReadOptions) (model.Document, error) {
-	position, ok := c.bySlug[record.ID]
+	slug, partNumber := record.ID, 0
+	if base, number, found := strings.Cut(record.ID, partSeparator); found {
+		if parsed, err := strconv.Atoi(number); err == nil && parsed > 0 {
+			slug, partNumber = base, parsed
+		}
+	}
+	position, ok := c.bySlug[slug]
 	if !ok {
 		return model.Document{}, provider.ErrDocumentNotFound
 	}
@@ -1001,6 +1113,17 @@ func (c *corpus) Read(_ context.Context, record provider.Record, options model.R
 	body, title, err := c.render(entry)
 	if err != nil {
 		return model.Document{}, err
+	}
+	partNote := ""
+	if partNumber > 0 {
+		parts := splitParts(body)
+		if partNumber > len(parts) {
+			return model.Document{}, provider.ErrDocumentNotFound
+		}
+		selected := parts[partNumber-1]
+		partNote = fmt.Sprintf("**Part:** %d of %d of %q; search the document title to read it whole.  \n", partNumber, len(parts), title)
+		title = partTitle(title, selected.heading, partNumber, len(parts))
+		body = selected.text
 	}
 	format := "markdown"
 	content := body
@@ -1016,6 +1139,7 @@ func (c *corpus) Read(_ context.Context, record provider.Record, options model.R
 		format = "text"
 	default:
 		var header strings.Builder
+		header.WriteString(partNote)
 		fmt.Fprintf(&header, "**Source:** %s  \n**Fetched:** %s", entry.URL, entry.FetchedAt)
 		if entry.Status == statusStale {
 			header.WriteString(" (latest refetch failed; showing the previous copy)")
@@ -1027,7 +1151,7 @@ func (c *corpus) Read(_ context.Context, record provider.Record, options model.R
 			content = header.String() + body
 		}
 	}
-	document := model.Document{TemporalMetadata: record.Temporal, ID: entry.Slug, Title: title, URL: entry.URL, Format: format}
+	document := model.Document{TemporalMetadata: record.Temporal, ID: record.ID, Title: title, URL: entry.URL, Format: format}
 	return markdowndoc.Page(document, content, options), nil
 }
 
@@ -1170,6 +1294,7 @@ func PDFMarkdown(text, title, source string) string {
 	}
 	var out strings.Builder
 	fmt.Fprintf(&out, "# %s\n\nPDF document: [%s](%s)\n\n", title, title, source)
+	printed := map[string]bool{}
 	for number, page := range pages {
 		var paragraph []string
 		flush := func() {
@@ -1186,6 +1311,12 @@ func PDFMarkdown(text, title, source string) string {
 			case line == "":
 				flush()
 			case repeated(line):
+				// Running headers are kept once, where they first appear.
+				if !printed[line] {
+					printed[line] = true
+					paragraph = append(paragraph, line)
+					wrote = true
+				}
 			case pdfChapter.MatchString(line) && len(line) < 120:
 				flush()
 				fmt.Fprintf(&out, "## %s\n\n", line)
