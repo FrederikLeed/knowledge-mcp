@@ -746,7 +746,11 @@ func titleFromFilename(name string) string {
 	if decoded, err := url.PathUnescape(name); err == nil {
 		name = decoded
 	}
-	return strings.Join(strings.Fields(strings.ReplaceAll(name, "_", " ")), " ")
+	name = strings.ReplaceAll(name, "_", " ")
+	if !strings.Contains(name, " ") {
+		name = strings.ReplaceAll(name, "-", " ")
+	}
+	return strings.Join(strings.Fields(name), " ")
 }
 
 func pathOf(raw string) string {

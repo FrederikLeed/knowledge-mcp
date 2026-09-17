@@ -139,6 +139,11 @@ crawl:
 	}
 	mu.Lock()
 	defer mu.Unlock()
+	for name, want := range map[string]string{"Cirkulaere-nr.-13.pdf": "Cirkulaere nr. 13", "Regler%20U15.pdf": "Regler U15", "x": "x"} {
+		if got := titleFromFilename(name); got != want {
+			t.Errorf("titleFromFilename(%q) = %q, want %q", name, got, want)
+		}
+	}
 	if byPath["/assets/u16"].Title != "Turneringsregler U16-Cup 2026-2027" {
 		t.Fatalf("generic link title not replaced by the file name: %q", byPath["/assets/u16"].Title)
 	}
