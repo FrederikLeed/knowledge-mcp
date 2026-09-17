@@ -938,7 +938,7 @@ crawl:
       - "https://www.dbufyn.dk/media/"
       - "https://www.dbubornholm.dk/media/"
       - "https://cms.divisionsforeningen.dk/assets/"
-    max_pages: 1500
+    max_pages: 2000
     max_depth: 3
     start:
       - "https://www.dbujylland.dk/turneringer-regler/"
