@@ -153,13 +153,13 @@ datasets:
   - <<: *tool
     repo: SpecterOps/BloodHound
     name: BloodHound (source repository docs)
-    description: README and in-repository Markdown documentation for SpecterOps BloodHound Community Edition (attack path management for Active Directory and Entra ID).
-    topics: [BloodHound, Active Directory, attack paths, Entra ID, security]
+    description: README and in-repository Markdown documentation for SpecterOps BloodHound Community Edition (identity exposure analysis for Active Directory and Entra ID).
+    topics: [BloodHound, Active Directory, identity exposure, Entra ID, security]
   - <<: *tool
     repo: SpecterOps/bloodhound-docs
     name: BloodHound documentation
     description: The official BloodHound documentation site (bloodhound.specterops.io) - collection, analysis, edges, nodes, OpenGraph and administration.
-    topics: [BloodHound, Active Directory, Entra ID, attack paths, OpenGraph, edges]
+    topics: [BloodHound, Active Directory, Entra ID, identity exposure, OpenGraph, edges]
     include: ["docs/**/*.md", "docs/**/*.mdx"]
     url_rules:
       - {prefix: "docs/", base: "https://bloodhound.specterops.io/"}
@@ -193,9 +193,9 @@ datasets:
       - {prefix: "website/docs/", base: "https://maester.dev/docs/"}
   - <<: *tool
     repo: ly4k/Certipy
-    name: Certipy
-    description: README and documentation for Certipy, the Active Directory Certificate Services enumeration and abuse toolkit.
-    topics: [Certipy, AD CS, ESC, certificates, Active Directory]
+    name: Certipy (AD CS assessment)
+    description: README and documentation for Certipy, an Active Directory Certificate Services configuration assessment tool.
+    topics: [AD CS, certificate templates, PKI hardening, Active Directory]
   - <<: *tool
     repo: EvotecIT/PasswordSolution
     name: PasswordSolution
@@ -218,9 +218,9 @@ datasets:
     topics: [Group Policy, Active Directory, security analysis]
   - <<: *tool
     repo: GhostPack/Certify
-    name: Certify
-    description: README and documentation for Certify, the AD CS enumeration and abuse tool.
-    topics: [Certify, AD CS, certificates, Active Directory]
+    name: Certify (AD CS assessment)
+    description: README and documentation for Certify, an AD CS configuration assessment tool.
+    topics: [AD CS, certificate templates, PKI hardening, Active Directory]
   - <<: *tool
     repo: GhostPack/PSPKIAudit
     name: PSPKIAudit
@@ -228,14 +228,14 @@ datasets:
     topics: [PSPKIAudit, AD CS, PowerShell, audit]
   - <<: *tool
     repo: GhostPack/Rubeus
-    name: Rubeus
-    description: README and changelog for Rubeus, the Kerberos interaction and abuse toolkit (roasting, ticket requests, delegation abuse, pass-the-ticket).
-    topics: [Rubeus, Kerberos, Kerberoasting, delegation, Active Directory]
+    name: Rubeus (Kerberos assessment)
+    description: README and changelog for Rubeus, a Kerberos security assessment tool (service account, delegation and ticket configuration checks).
+    topics: [Kerberos, service accounts, delegation, Active Directory]
   - <<: *tool
     repo: MichaelGrafnetter/DSInternals
     name: DSInternals
-    description: DSInternals PowerShell module documentation - cmdlet reference for offline ntds.dit access, DCSync replication, password quality testing, and credential roaming.
-    topics: [DSInternals, Active Directory, password quality, ntds.dit, PowerShell]
+    description: DSInternals PowerShell module documentation - cmdlet reference for Active Directory database and replication administration and password quality auditing.
+    topics: [DSInternals, Active Directory, password quality, PowerShell]
     include: [".github/README.md", "Documentation/**/*.md"]
   - <<: *tool
     repo: cisagov/ScubaGear
@@ -245,9 +245,10 @@ datasets:
     include: ["README.md", "docs/**/*.md", "baselines/**/*.md", "PowerShell/ScubaGear/baselines/**/*.md"]
   - <<: *tool
     repo: The-Hacker-Recipes/The-Hacker-Recipes
-    name: The Hacker Recipes
-    description: The Hacker Recipes knowledge base - Active Directory, web, and infrastructure attack techniques with tooling guidance.
-    topics: [offensive security, Active Directory, Kerberos, AD CS, techniques]
+    id: ad-security-kb
+    name: AD and infrastructure security knowledge base
+    description: Community knowledge base on Active Directory, web and infrastructure security weaknesses, used as a reference for assessment findings.
+    topics: [security assessment, Active Directory, Kerberos, AD CS, hardening]
     include: ["docs/src/**/*.md", "README.md"]
     site_root: https://www.thehacker.recipes
     url_rules:

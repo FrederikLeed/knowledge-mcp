@@ -205,8 +205,8 @@ Defender/Sentinel, support articles, PowerShell 7.6, Microsoft 365, Azure,
 security/privileged access), Home Assistant user and developer docs, and AD/Entra
 security tools (BloodHound, SharpHound, AzureHound, PingCastle, AD Miner,
 Maester, Certipy, PasswordSolution, Entra CA Insight, Azure tiering, GPOHound,
-Certify, PSPKIAudit, Rubeus, DSInternals, CISA ScubaGear baselines, The Hacker
-Recipes). To add a repository without rebuilding, put entries in the custom
+Certify, PSPKIAudit, Rubeus, DSInternals, CISA ScubaGear baselines, and an AD/infrastructure security knowledge base
+(`ad-security-kb`, from The-Hacker-Recipes repository)). To add a repository without rebuilding, put entries in the custom
 catalog `<data-dir>/gitdocs.yaml` (`--gitdocs-catalog`), most easily from the
 dashboard's **Sources** section. It uses the same format, is re-read whenever it
 changes, and may not reuse a built-in dataset ID; a broken file is reported and
@@ -265,7 +265,7 @@ it into the webpages directory to enable the `dbu-rules` dataset.
 `contrib/webpages/ad-security-references.yaml` (shipped the same way) lists 85
 AD/Entra security reference pages: MITRE ATT&CK technique pages, Microsoft
 security policy, Graph permission and KB references not covered by gitdocs,
-NIST SP 800-63B, and canonical AD attack research write-ups; copy it to enable
+NIST SP 800-63B, and published AD security research; copy it to enable
 the `ad-security-references` dataset.
 
 Slugs are the document IDs. HTML pages are stored raw and converted to Markdown

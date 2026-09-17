@@ -38,7 +38,7 @@ func TestBuiltinCatalog(t *testing.T) {
 	if !ok || len(entra.Fragments) == 0 || entra.SiteRoot != "https://learn.microsoft.com" || entra.Project != "Microsoft Learn" {
 		t.Fatalf("entra inherits Microsoft Learn defaults: %#v", entra)
 	}
-	for _, id := range []string{"microsoftdocs-azure-docs", "home-assistant-home-assistant.io", "home-assistant-developers.home-assistant", "specterops-bloodhound", "specterops-bloodhound-docs", "the-hacker-recipes-the-hacker-recipes", "maester365-maester", "microsoftdocs-security", "ghostpack-rubeus", "michaelgrafnetter-dsinternals", "cisagov-scubagear"} {
+	for _, id := range []string{"microsoftdocs-azure-docs", "home-assistant-home-assistant.io", "home-assistant-developers.home-assistant", "specterops-bloodhound", "specterops-bloodhound-docs", "ad-security-kb", "maester365-maester", "microsoftdocs-security", "ghostpack-rubeus", "michaelgrafnetter-dsinternals", "cisagov-scubagear"} {
 		if _, ok := byID[id]; !ok {
 			t.Fatalf("missing dataset %q", id)
 		}
@@ -90,8 +90,8 @@ func TestCitationURLMapping(t *testing.T) {
 		{"home-assistant-home-assistant.io", "source/getting-started/index.markdown", "https://www.home-assistant.io/getting-started/"},
 		{"home-assistant-developers.home-assistant", "docs/core/entity/light.md", "https://developers.home-assistant.io/docs/core/entity/light"},
 		{"specterops-bloodhound-docs", "docs/analyze-data/configuration.mdx", "https://bloodhound.specterops.io/analyze-data/configuration"},
-		{"the-hacker-recipes-the-hacker-recipes", "docs/src/ad/movement/adcs/certifried.md", "https://www.thehacker.recipes/ad/movement/adcs/certifried"},
-		{"the-hacker-recipes-the-hacker-recipes", "README.md", "https://github.com/The-Hacker-Recipes/The-Hacker-Recipes/blob/" + testCommit + "/README.md"},
+		{"ad-security-kb", "docs/src/ad/movement/adcs/certifried.md", "https://www.thehacker.recipes/ad/movement/adcs/certifried"},
+		{"ad-security-kb", "README.md", "https://github.com/The-Hacker-Recipes/The-Hacker-Recipes/blob/" + testCommit + "/README.md"},
 		{"specterops-bloodhound", "packages/go/My Package/README.md", "https://github.com/SpecterOps/BloodHound/blob/" + testCommit + "/packages/go/My%20Package/README.md"},
 	}
 	for _, test := range cases {

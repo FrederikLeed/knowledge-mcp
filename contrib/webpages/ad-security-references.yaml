@@ -11,10 +11,10 @@
 # Install: copy to <data-dir>/webpages/ad-security-references.yaml, then
 #   knowledge-mcp dataset download ad-security-references
 name: AD security references
-description: Active Directory and Entra ID security reference pages - MITRE ATT&CK techniques (Kerberos, DCSync, AD CS, delegation, GPO, relay), Microsoft security policy and permission references, NIST SP 800-63B, and canonical AD attack research write-ups.
+description: Active Directory and Entra ID security reference pages - MITRE ATT&CK technique pages, Microsoft security policy and permission references, NIST SP 800-63B, and published AD security research cited in assessment findings.
 project: AD security
 language: en
-topics: [Active Directory, Entra ID, MITRE ATT&CK, Kerberos, AD CS, NTLM relay, delegation, security assessment]
+topics: [Active Directory, Entra ID, MITRE ATT&CK, Kerberos, AD CS, security assessment, hardening]
 concurrency: 2
 delay: 1s
 pages:
