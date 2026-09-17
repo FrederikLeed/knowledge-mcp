@@ -13,9 +13,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -47,6 +50,7 @@ const (
 	fetchAttempts      = 3
 
 	documentsFile = "documents.json"
+	pdfTextSuffix = ".pdf.txt"
 	rawDirectory  = "raw"
 
 	TypeHTML = "html"
@@ -83,6 +87,7 @@ type Config struct {
 	Delay       string   `yaml:"delay" json:"delay,omitempty"`
 	Concurrency int      `yaml:"concurrency" json:"concurrency,omitempty"`
 	Pages       []Page   `yaml:"pages" json:"pages"`
+	Crawl       []Crawl  `yaml:"crawl" json:"crawl,omitempty"`
 }
 
 // ParseConfig parses and validates a dataset list (YAML or JSON).
@@ -91,8 +96,13 @@ func ParseConfig(data []byte) (Config, error) {
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return Config{}, fmt.Errorf("parse page list: %w", err)
 	}
-	if len(config.Pages) == 0 {
-		return Config{}, errors.New("page list has no pages")
+	if len(config.Pages) == 0 && len(config.Crawl) == 0 {
+		return Config{}, errors.New("page list has no pages or crawl")
+	}
+	for index := range config.Crawl {
+		if err := config.Crawl[index].validate(index); err != nil {
+			return Config{}, err
+		}
 	}
 	seen := make(map[string]bool, len(config.Pages))
 	for index := range config.Pages {
@@ -155,6 +165,8 @@ type WebPages struct {
 	http         *http.Client
 	now          func() time.Time
 	sleep        func(context.Context, time.Duration) error
+	// pdfText extracts plain text from a PDF document.
+	pdfText func(context.Context, []byte) (string, error)
 }
 
 // New returns a provider reading dataset lists from configDir. installedDir
@@ -163,7 +175,34 @@ type WebPages struct {
 func New(configDir, installedDir string) *WebPages {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = 45 * time.Second
-	return &WebPages{configDir: configDir, installedDir: installedDir, http: &http.Client{Transport: transport, Timeout: 2 * time.Minute}, now: time.Now, sleep: sleepContext}
+	return &WebPages{configDir: configDir, installedDir: installedDir, http: &http.Client{Transport: transport, Timeout: 2 * time.Minute}, now: time.Now, sleep: sleepContext, pdfText: pdftotext}
+}
+
+// pdftotext extracts PDF text with poppler's pdftotext, keeping the page
+// layout so numbered paragraphs and simple tables stay readable.
+func pdftotext(ctx context.Context, data []byte) (string, error) {
+	file, err := os.CreateTemp("", "knowledge-*.pdf")
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(file.Name()) }()
+	if _, err := file.Write(data); err != nil {
+		_ = file.Close()
+		return "", err
+	}
+	if err := file.Close(); err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	var stderr bytes.Buffer
+	command := exec.CommandContext(ctx, "pdftotext", "-layout", "-enc", "UTF-8", file.Name(), "-")
+	command.Stderr = &stderr
+	output, err := command.Output()
+	if err != nil {
+		return "", fmt.Errorf("pdftotext: %w %s", err, strings.TrimSpace(stderr.String()))
+	}
+	return string(output), nil
 }
 
 func sleepContext(ctx context.Context, duration time.Duration) error {
@@ -266,7 +305,7 @@ func (p *WebPages) Discover(_ context.Context, filter string, _ bool) ([]model.A
 			Provider: ProviderID, Variant: variantID, ID: dataset, DisplayName: config.Name, Description: config.Description,
 			Project: config.Project, ContentType: "Curated web pages", Profile: profile(config), Language: language(config.Language),
 			OnlineSourceURL: sourceSite(config), ReleaseDate: today, Available: true, PartCount: len(config.Pages),
-			Variants: []model.Variant{{ID: variantID, Name: "Web pages", Description: "Fetched HTML converted to Markdown; PDF entries are indexed by title and link only", Format: "text/html"}},
+			Variants: []model.Variant{{ID: variantID, Name: "Web pages", Description: "Fetched HTML and PDF text converted to Markdown", Format: "text/html"}},
 		})
 	}
 	if len(result) == 0 && len(problems) > 0 {
@@ -363,14 +402,32 @@ func isConfigExtension(extension string) bool {
 }
 
 func sourceSite(config Config) string {
-	if parsed, err := url.Parse(config.Pages[0].URL); err == nil {
+	first := ""
+	if len(config.Pages) > 0 {
+		first = config.Pages[0].URL
+	} else if len(config.Crawl) > 0 {
+		first = config.Crawl[0].Include[0]
+	}
+	if parsed, err := url.Parse(first); err == nil && parsed.Host != "" {
 		return parsed.Scheme + "://" + parsed.Host + "/"
 	}
 	return ""
 }
 
 func profile(config Config) model.DatasetProfile {
-	return model.DatasetProfile{Topics: config.Topics, DocumentTypes: []string{"web pages", "regulations", "guidance"}, UpdateCadence: "Refetched at most weekly", CoverageNotes: fmt.Sprintf("%d curated pages; PDF documents are listed by title and link without extracted text.", len(config.Pages)), SourceFeatures: []string{"main-content extraction", "Markdown tables", "absolute source links"}}
+	return model.DatasetProfile{Topics: config.Topics, DocumentTypes: []string{"web pages", "regulations", "guidance"}, UpdateCadence: "Refetched at most weekly", CoverageNotes: coverageNotes(config), SourceFeatures: []string{"main-content extraction", "Markdown tables", "absolute source links"}}
+}
+
+func coverageNotes(config Config) string {
+	notes := fmt.Sprintf("%d curated pages", len(config.Pages))
+	if len(config.Crawl) > 0 {
+		var sites []string
+		for _, crawl := range config.Crawl {
+			sites = append(sites, crawl.Include...)
+		}
+		notes += fmt.Sprintf(" plus pages crawled under %s", strings.Join(sites, ", "))
+	}
+	return notes + "; PDF documents are indexed with their extracted text."
 }
 
 func language(code string) model.Language {
@@ -398,7 +455,10 @@ func (p *WebPages) Latest(_ context.Context, collection, variant string) (provid
 	}
 	now := p.now().UTC()
 	year, week := now.ISOWeek()
-	canonical, err := json.Marshal(config.Pages)
+	canonical, err := json.Marshal(struct {
+		Pages []Page
+		Crawl []Crawl
+	}{config.Pages, config.Crawl})
 	if err != nil {
 		return provider.Release{}, err
 	}
@@ -454,6 +514,34 @@ func (p *WebPages) Acquire(ctx context.Context, collection, _ string, value prov
 				}
 			}
 		}
+	}
+	if len(config.Crawl) > 0 {
+		known := map[string]Page{}
+		used := map[string]string{}
+		for _, page := range config.Pages {
+			known[normalizeURL(page.URL)] = page
+			used[page.Slug] = page.URL
+		}
+		cached := func(page Page) (pageEntry, bool) {
+			entry, ok := resumed[page.Slug]
+			return entry, ok && entry.URL == page.URL
+		}
+		found, err := p.discover(ctx, config, rawDir, known, used, cached, func(count int, message string) {
+			progress("discovering_pages", int64(count), 0, "pages", 0, message)
+		})
+		if err != nil {
+			return model.Manifest{}, err
+		}
+		pages := append([]Page(nil), config.Pages...)
+		for _, result := range found {
+			if !result.static {
+				pages = append(pages, result.page)
+			}
+			if result.entry != nil && result.entry.Status == statusOK {
+				resumed[result.page.Slug] = *result.entry
+			}
+		}
+		config.Pages = pages
 	}
 	entries := make([]pageEntry, len(config.Pages))
 	var mu sync.Mutex
@@ -569,43 +657,60 @@ func (p *WebPages) fetchPage(ctx context.Context, config Config, page Page, rawD
 	if page.Type == TypePDF {
 		target := page.URL
 		if !strings.HasSuffix(strings.ToLower(pathOf(page.URL)), ".pdf") && page.PDFLinkText != "" {
-			body, _, _, err := p.get(ctx, config, page.URL)
+			landing, err := p.get(ctx, config, page.URL)
 			if err != nil {
 				return fail(err)
 			}
-			link, err := findPDFLink(body, page.URL, page.PDFLinkText)
+			link, err := findPDFLink(landing.body, page.URL, page.PDFLinkText)
 			if err != nil {
 				return fail(err)
 			}
 			target = link
 		}
-		entry.ResolvedURL, entry.ContentType = target, "application/pdf"
-		entry.File = page.Slug + ".pdf.json"
-		data, _ := json.Marshal(map[string]string{"url": page.URL, "resolved_url": target})
-		if err := writeAtomic(filepath.Join(rawDir, entry.File), data); err != nil {
+		document, err := p.get(ctx, config, target)
+		if err != nil {
+			return fail(err)
+		}
+		if !bytes.HasPrefix(bytes.TrimLeft(document.body, " \t\r\n"), []byte("%PDF")) {
+			return fail(fmt.Errorf("%s is not a PDF document", document.finalURL))
+		}
+		entry.ResolvedURL, entry.ContentType = document.finalURL, "application/pdf"
+		if entry.Title == "" {
+			entry.Title = titleFromFilename(firstNonEmpty(document.filename, path.Base(pathOf(document.finalURL))))
+		}
+		if err := p.storePDF(ctx, &entry, document.body, rawDir); err != nil {
 			return fail(err)
 		}
 		entry.Status = statusOK
 		return entry
 	}
-	body, contentType, finalURL, err := p.get(ctx, config, page.URL)
+	response, err := p.get(ctx, config, page.URL)
 	if err != nil {
 		return fail(err)
 	}
+	body, contentType, finalURL := response.body, response.contentType, response.finalURL
 	entry.ContentType = contentType
 	if finalURL != page.URL {
 		entry.ResolvedURL = finalURL
 	}
 	if strings.Contains(strings.ToLower(contentType), "pdf") {
-		entry.Type, entry.ResolvedURL, entry.File = TypePDF, finalURL, page.Slug+".pdf.json"
-		data, _ := json.Marshal(map[string]string{"url": page.URL, "resolved_url": finalURL})
-		body = data
-	} else {
-		entry.File = page.Slug + ".html"
-		if decoded, decodeErr := charset.NewReader(bytes.NewReader(body), contentType); decodeErr == nil {
-			if utf8Body, readErr := io.ReadAll(decoded); readErr == nil {
-				body = utf8Body
-			}
+		entry.Type, entry.ResolvedURL = TypePDF, finalURL
+		if entry.Title == "" {
+			entry.Title = titleFromFilename(firstNonEmpty(response.filename, path.Base(pathOf(finalURL))))
+		}
+		if err := p.storePDF(ctx, &entry, body, rawDir); err != nil {
+			return fail(err)
+		}
+		entry.Status = statusOK
+		return entry
+	}
+	if mediaType := strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])); mediaType != "" && mediaType != "text/html" && mediaType != "application/xhtml+xml" {
+		return fail(fmt.Errorf("unsupported content type %q", mediaType))
+	}
+	entry.File = page.Slug + ".html"
+	if decoded, decodeErr := charset.NewReader(bytes.NewReader(body), contentType); decodeErr == nil {
+		if utf8Body, readErr := io.ReadAll(decoded); readErr == nil {
+			body = utf8Body
 		}
 	}
 	if err := writeAtomic(filepath.Join(rawDir, entry.File), body); err != nil {
@@ -613,6 +718,35 @@ func (p *WebPages) fetchPage(ctx context.Context, config Config, page Page, rawD
 	}
 	entry.Status = statusOK
 	return entry
+}
+
+// storePDF writes the extracted text of a PDF. When extraction fails the
+// entry keeps a link-only record so the document stays findable by title.
+func (p *WebPages) storePDF(ctx context.Context, entry *pageEntry, data []byte, rawDir string) error {
+	text, err := "", errors.New("no PDF text extractor")
+	if p.pdfText != nil {
+		text, err = p.pdfText(ctx, data)
+	}
+	if err == nil && strings.TrimSpace(text) == "" {
+		err = errors.New("PDF has no extractable text")
+	}
+	if err != nil {
+		entry.File, entry.Error = entry.Slug+".pdf.json", err.Error()
+		link, _ := json.Marshal(map[string]string{"url": entry.URL, "resolved_url": entry.ResolvedURL})
+		return writeAtomic(filepath.Join(rawDir, entry.File), link)
+	}
+	entry.File = entry.Slug + pdfTextSuffix
+	return writeAtomic(filepath.Join(rawDir, entry.File), []byte(text))
+}
+
+// titleFromFilename turns "Turneringsregler_U16-Cup 2026.pdf" into
+// "Turneringsregler U16-Cup 2026".
+func titleFromFilename(name string) string {
+	name = strings.TrimSuffix(name, path.Ext(name))
+	if decoded, err := url.PathUnescape(name); err == nil {
+		name = decoded
+	}
+	return strings.Join(strings.Fields(strings.ReplaceAll(name, "_", " ")), " ")
 }
 
 func pathOf(raw string) string {
@@ -630,12 +764,12 @@ type statusError struct {
 func (e *statusError) Error() string { return "HTTP " + strconv.Itoa(e.status) }
 
 // get fetches a URL with retries for transient failures.
-func (p *WebPages) get(ctx context.Context, config Config, target string) ([]byte, string, string, error) {
+func (p *WebPages) get(ctx context.Context, config Config, target string) (fetched, error) {
 	var lastErr error
 	for attempt := 1; attempt <= fetchAttempts; attempt++ {
-		body, contentType, finalURL, err := p.getOnce(ctx, config, target)
+		result, err := p.getOnce(ctx, config, target)
 		if err == nil {
-			return body, contentType, finalURL, nil
+			return result, nil
 		}
 		lastErr = err
 		var status *statusError
@@ -652,43 +786,52 @@ func (p *WebPages) get(ctx context.Context, config Config, target string) ([]byt
 			}
 		}
 		if err := p.sleep(ctx, wait); err != nil {
-			return nil, "", "", err
+			return fetched{}, err
 		}
 	}
-	return nil, "", "", fmt.Errorf("fetch %s: %w", target, lastErr)
+	return fetched{}, fmt.Errorf("fetch %s: %w", target, lastErr)
 }
 
-func (p *WebPages) getOnce(ctx context.Context, config Config, target string) ([]byte, string, string, error) {
+// fetched is one successful HTTP response.
+type fetched struct {
+	body        []byte
+	contentType string
+	finalURL    string
+	// filename is the Content-Disposition file name, if any.
+	filename string
+}
+
+func (p *WebPages) getOnce(ctx context.Context, config Config, target string) (fetched, error) {
 	request, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
-		return nil, "", "", err
+		return fetched{}, err
 	}
 	request.Header.Set("User-Agent", config.userAgent())
 	request.Header.Set("Accept", "text/html,application/xhtml+xml,application/pdf;q=0.9,*/*;q=0.8")
 	request.Header.Set("Accept-Language", config.Language+",en;q=0.8")
 	response, err := p.http.Do(request)
 	if err != nil {
-		return nil, "", "", err
+		return fetched{}, err
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 1<<16))
-		return nil, "", "", &statusError{status: response.StatusCode, retryAfter: response.Header.Get("Retry-After")}
+		return fetched{}, &statusError{status: response.StatusCode, retryAfter: response.Header.Get("Retry-After")}
 	}
 	contentType := response.Header.Get("Content-Type")
 	finalURL := response.Request.URL.String()
-	if strings.Contains(strings.ToLower(contentType), "pdf") {
-		// PDF text extraction is not supported; the link is what gets indexed.
-		return nil, contentType, finalURL, nil
-	}
 	body, err := io.ReadAll(io.LimitReader(response.Body, maxPageBytes+1))
 	if err != nil {
-		return nil, "", "", err
+		return fetched{}, err
 	}
 	if len(body) > maxPageBytes {
-		return nil, "", "", fmt.Errorf("page exceeds %d bytes", maxPageBytes)
+		return fetched{}, fmt.Errorf("page exceeds %d bytes", maxPageBytes)
 	}
-	return body, contentType, finalURL, nil
+	filename := ""
+	if _, params, err := mime.ParseMediaType(response.Header.Get("Content-Disposition")); err == nil {
+		filename = params["filename"]
+	}
+	return fetched{body: body, contentType: contentType, finalURL: finalURL, filename: filename}, nil
 }
 
 // findPDFLink resolves a PDF asset link on a landing page: first an anchor
@@ -799,8 +942,10 @@ func (c *corpus) scan(ctx context.Context, after string, bodies bool, sink provi
 		}
 		record := provider.Record{ID: entry.Slug, Title: title, URL: entry.URL, Locator: entry.Slug, Primary: true, Identifiers: []string{entry.Slug}, Keywords: []string{c.dataset}, RankWeight: 1, Metadata: map[string]string{"type": entry.Type, "fetched_at": entry.FetchedAt}}
 		if entry.Type == TypePDF {
-			record.RankWeight = 0.6
 			record.Keywords = append(record.Keywords, "PDF")
+			if !strings.HasSuffix(entry.File, pdfTextSuffix) {
+				record.RankWeight = 0.6
+			}
 		}
 		if bodies {
 			record.Body = body
@@ -824,6 +969,9 @@ func (c *corpus) render(entry pageEntry) (string, string, error) {
 	if entry.Type == TypePDF {
 		target := firstNonEmpty(entry.ResolvedURL, entry.URL)
 		title := firstNonEmpty(entry.Title, entry.Slug)
+		if strings.HasSuffix(entry.File, pdfTextSuffix) {
+			return PDFMarkdown(string(data), title, target), title, nil
+		}
 		return fmt.Sprintf("# %s\n\nPDF document: [%s](%s)\n\nThe PDF text is not indexed; open the link to read the document. Landing page: %s\n", title, title, target, entry.URL), title, nil
 	}
 	pageURL := firstNonEmpty(entry.ResolvedURL, entry.URL)
@@ -989,4 +1137,69 @@ func linkOrCopy(source, destination string) error {
 		return err
 	}
 	return writeAtomic(destination, data)
+}
+
+var (
+	pdfParagraph = regexp.MustCompile(`^§\s*\d+[a-z]?(\.\d+)*\b`)
+	pdfChapter   = regexp.MustCompile(`^(?:[IVXL]+\.|Kapitel\s+\d+|KAPITEL\s+\d+)\s+\S`)
+	pdfSpaces    = regexp.MustCompile(`\s{3,}`)
+)
+
+// PDFMarkdown turns pdftotext layout output into Markdown: chapter lines
+// become headings, "§ n" paragraphs start bold on a new paragraph, and page
+// breaks become rules. Running headers repeated on every page are dropped.
+func PDFMarkdown(text, title, source string) string {
+	pages := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\f")
+	lineCount := map[string]int{}
+	for _, page := range pages {
+		seen := map[string]bool{}
+		for _, line := range strings.Split(page, "\n") {
+			line = strings.TrimSpace(pdfSpaces.ReplaceAllString(line, "  "))
+			if line != "" && !seen[line] {
+				seen[line] = true
+				lineCount[line]++
+			}
+		}
+	}
+	repeated := func(line string) bool {
+		return len(pages) >= 4 && lineCount[line] >= len(pages)/2 && len(line) < 120
+	}
+	var out strings.Builder
+	fmt.Fprintf(&out, "# %s\n\nPDF document: [%s](%s)\n\n", title, title, source)
+	for number, page := range pages {
+		var paragraph []string
+		flush := func() {
+			if len(paragraph) > 0 {
+				out.WriteString(strings.Join(paragraph, "\n"))
+				out.WriteString("\n\n")
+				paragraph = nil
+			}
+		}
+		wrote := false
+		for _, raw := range strings.Split(page, "\n") {
+			line := strings.TrimSpace(pdfSpaces.ReplaceAllString(raw, "  "))
+			switch {
+			case line == "":
+				flush()
+			case repeated(line):
+			case pdfChapter.MatchString(line) && len(line) < 120:
+				flush()
+				fmt.Fprintf(&out, "## %s\n\n", line)
+				wrote = true
+			case pdfParagraph.MatchString(line):
+				flush()
+				marker := pdfParagraph.FindString(line)
+				paragraph = append(paragraph, strings.TrimSpace("**"+marker+"** "+strings.TrimSpace(strings.TrimPrefix(line, marker))))
+				wrote = true
+			default:
+				paragraph = append(paragraph, line)
+				wrote = true
+			}
+		}
+		flush()
+		if wrote && number < len(pages)-1 {
+			fmt.Fprintf(&out, "<!-- page %d -->\n\n", number+1)
+		}
+	}
+	return strings.TrimSpace(out.String()) + "\n"
 }

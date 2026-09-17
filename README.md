@@ -254,12 +254,36 @@ pages:
   - {slug: herre-dm-regler, title: "Herre-DM regler", url: "https://divisionsforeningen.dk/love-og-regler", type: pdf, pdf_link_text: "Turneringsregler for Herre-DM"}
 ```
 
+PDF entries (and linked PDF assets) are downloaded and their text is extracted
+with poppler's `pdftotext` (installed in the container image); numbered `§`
+paragraphs and chapter headings become Markdown sections. Without `pdftotext`
+a PDF is indexed by title and link only.
+
+A list can also discover pages itself. Each `crawl` entry follows links from
+its `start` pages and `sitemaps`, fetching only URLs under an `include`
+prefix, skipping URLs containing an `exclude` string and anything robots.txt
+disallows. Linked PDFs under `include`, and links under a `documents` prefix
+(for CMS asset URLs without a `.pdf` extension), are indexed as PDFs and not
+followed. `max_pages` (default 1000, at most 10000) and `max_depth` (default 6)
+bound the crawl. Crawled pages are fetched once per weekly release; statically
+listed pages keep their slug and title.
+
+```yaml
+crawl:
+  - start: ["https://www.dbu.dk/turneringer-og-resultater/love-og-regler/"]
+    include: ["https://www.dbu.dk/turneringer-og-resultater/love-og-regler/"]
+    documents: ["https://www.dbu.dk/media/"]
+    max_pages: 2000
+```
+
 Page lists can also be created, edited, and deleted in the dashboard's
 **Sources** section, which validates each file before saving it and can start
 the fetch right away. Deleting a list file keeps downloaded data until the
 dataset itself is deleted.
 
-`contrib/webpages/dbu-rules.yaml` is a ready-made list of 496 DBU rule pages
+`contrib/webpages/dbu-rules.yaml` covers DBU rules: 493 curated pages plus crawls of
+every rules section on dbu.dk, divisionsforeningen.dk and the six lokalunion
+sites
 (the container image ships it under `/usr/share/knowledge-mcp/webpages`); copy
 it into the webpages directory to enable the `dbu-rules` dataset.
 `contrib/webpages/ad-security-references.yaml` (shipped the same way) lists 85

@@ -20,7 +20,7 @@ RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache
       -o /out/knowledge-mcp .
 
 FROM alpine:3.22
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata poppler-utils \
  && addgroup -S knowledge && adduser -S -G knowledge -h /data knowledge \
  && mkdir -p /data /usr/share/knowledge-mcp && chown knowledge:knowledge /data
 COPY --from=build /out/knowledge-mcp /usr/local/bin/knowledge-mcp

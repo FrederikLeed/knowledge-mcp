@@ -2,9 +2,11 @@ package webpages
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -168,6 +170,9 @@ func newTestSite(t *testing.T) (*httptest.Server, *siteState) {
 		case "/direct-pdf":
 			response.Header().Set("Content-Type", "application/pdf")
 			_, _ = response.Write([]byte("%PDF-1.7"))
+		case "/assets/uuid-ungdom":
+			response.Header().Set("Content-Type", "application/octet-stream")
+			_, _ = response.Write([]byte("%PDF-ungdom"))
 		default:
 			http.NotFound(response, request)
 		}
@@ -200,6 +205,14 @@ pages:
 	}
 	backend := New(configDir, dataDir)
 	backend.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+	// The landing-page PDF extracts; the direct PDF fails extraction and
+	// must fall back to a link-only entry.
+	backend.pdfText = func(_ context.Context, data []byte) (string, error) {
+		if string(data) == "%PDF-ungdom" {
+			return "Turneringsregler\n\n§ 27.1   Spilletiden i U15-rækkerne er 2x40 minutter.\n", nil
+		}
+		return "", errors.New("unsupported PDF")
+	}
 	clock := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
 	backend.now = func() time.Time { return clock }
 	ctx := context.Background()
@@ -256,7 +269,7 @@ pages:
 	if statuses["missing"].Status != statusFailed || !strings.Contains(statuses["missing"].Error, "HTTP 404") {
 		t.Fatalf("missing = %#v", statuses["missing"])
 	}
-	if statuses["ungdoms-dm"].ResolvedURL != server.URL+"/assets/uuid-ungdom" || statuses["direct"].Type != TypePDF || statuses["moved"].ResolvedURL != server.URL+"/rules/" {
+	if statuses["ungdoms-dm"].ResolvedURL != server.URL+"/assets/uuid-ungdom" || statuses["ungdoms-dm"].File != "ungdoms-dm.pdf.txt" || statuses["direct"].Type != TypePDF || statuses["direct"].File != "direct.pdf.json" || !strings.Contains(statuses["direct"].Error, "unsupported PDF") || statuses["moved"].ResolvedURL != server.URL+"/rules/" {
 		t.Fatalf("statuses = %#v", statuses)
 	}
 
@@ -295,8 +308,16 @@ pages:
 		t.Fatalf("document = %#v", document)
 	}
 	pdf, err := reader.Read(ctx, "", "ungdoms-dm", model.ReadOptions{})
-	if err != nil || !strings.Contains(pdf.Content, "PDF document: [Ungdoms-DM regler]("+server.URL+"/assets/uuid-ungdom)") {
+	if err != nil || !strings.Contains(pdf.Content, "PDF document: [Ungdoms-DM regler]("+server.URL+"/assets/uuid-ungdom)") || !strings.Contains(pdf.Content, "**§ 27.1** Spilletiden i U15-rækkerne er 2x40 minutter.") {
 		t.Fatalf("pdf = %#v, %v", pdf, err)
+	}
+	pdfHits, err := reader.Search(ctx, "U15-rækkerne spilletiden", model.SearchOptions{Limit: 5}, true)
+	if err != nil || len(pdfHits.Hits) == 0 || pdfHits.Hits[0].ID != "ungdoms-dm" {
+		t.Fatalf("PDF text is not searchable: %#v, %v", pdfHits, err)
+	}
+	direct, err := reader.Read(ctx, "", "direct", model.ReadOptions{})
+	if err != nil || !strings.Contains(direct.Content, "The PDF text is not indexed") {
+		t.Fatalf("link-only PDF = %#v, %v", direct, err)
 	}
 
 	// An update where a page now fails keeps the previous copy as stale.
@@ -372,8 +393,8 @@ func TestShippedDBUListParses(t *testing.T) {
 			pdfs++
 		}
 	}
-	if len(config.Pages) != 496 || pdfs != 4 || config.Language != "da" || config.Concurrency != 2 || config.delay() != time.Second {
-		t.Fatalf("pages=%d pdfs=%d config=%s/%d/%s", len(config.Pages), pdfs, config.Language, config.Concurrency, config.Delay)
+	if len(config.Pages) != 493 || pdfs != 1 || len(config.Crawl) != 8 || config.Language != "da" || config.Concurrency != 2 || config.delay() != time.Second {
+		t.Fatalf("pages=%d pdfs=%d crawls=%d config=%s/%d/%s", len(config.Pages), pdfs, len(config.Crawl), config.Language, config.Concurrency, config.Delay)
 	}
 }
 
@@ -447,5 +468,52 @@ func TestSourceFileManagement(t *testing.T) {
 	}
 	if err := backend.DeleteSource("../escape"); err == nil {
 		t.Fatal("deleting an invalid name succeeded")
+	}
+}
+
+func TestPDFMarkdown(t *testing.T) {
+	t.Parallel()
+	header := "Turneringsregler for herreungdomsturneringerne"
+	page := func(body string) string { return header + "\n\n" + body + "\n" }
+	text := strings.Join([]string{
+		page("I. Turneringens navn og administration\n\n§ 1.1     Turneringens navn er Ungdoms-DM."),
+		page("§ 27.1        Spilletiden i U17- og U19-rækkerne er 2x45 minutter. I U15-rækkerne spilles\nder 2x40 minutter."),
+		page("§ 27.2      Pausen mellem de to halvlege er max. 15 minutter."),
+		page("VIII. Protester\n\nTekst om protester."),
+	}, "\f")
+	markdown := PDFMarkdown(text, "Ungdoms-DM", "https://example.test/u.pdf")
+	for _, want := range []string{
+		"# Ungdoms-DM\n\nPDF document: [Ungdoms-DM](https://example.test/u.pdf)",
+		"## I. Turneringens navn og administration",
+		"**§ 27.1** Spilletiden i U17- og U19-rækkerne er 2x45 minutter. I U15-rækkerne spilles\nder 2x40 minutter.",
+		"**§ 27.2** Pausen",
+		"## VIII. Protester",
+		"<!-- page 1 -->",
+	} {
+		if !strings.Contains(markdown, want) {
+			t.Fatalf("markdown lacks %q:\n%s", want, markdown)
+		}
+	}
+	if strings.Contains(markdown, header) {
+		t.Fatalf("running header was kept:\n%s", markdown)
+	}
+	// A short document keeps lines that merely repeat.
+	if short := PDFMarkdown("Bilag\f§ 2  Bilag", "Kort", "u"); !strings.Contains(short, "Bilag\n") {
+		t.Fatalf("short document lost text:\n%s", short)
+	}
+}
+
+func TestPdftotextExtractsText(t *testing.T) {
+	if _, err := exec.LookPath("pdftotext"); err != nil {
+		t.Skip("pdftotext is not installed")
+	}
+	// Minimal one-page PDF with the text "Spilletid 2x40".
+	const document = "%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 100]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n4 0 obj<</Length 44>>stream\nBT /F1 12 Tf 20 50 Td (Spilletid 2x40) Tj ET\nendstream endobj\n5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n"
+	text, err := pdftotext(context.Background(), []byte(document))
+	if err != nil || !strings.Contains(text, "Spilletid 2x40") {
+		t.Fatalf("pdftotext = %q, %v", text, err)
+	}
+	if _, err := pdftotext(context.Background(), []byte("not a pdf")); err == nil {
+		t.Fatal("pdftotext accepted a non-PDF")
 	}
 }
